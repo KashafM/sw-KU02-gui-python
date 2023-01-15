@@ -4,7 +4,7 @@ import simplepyble
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     adapters = simplepyble.Adapter.get_adapters()
-    adapter = adapters();
+    adapter = adapters[0]
 
     if len(adapters) == 0:
         print("No adapters found")
