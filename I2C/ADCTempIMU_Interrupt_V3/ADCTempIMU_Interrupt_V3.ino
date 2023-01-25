@@ -166,25 +166,15 @@ void SampleAll() {
     c_temp_MPU = float(raw_t_MPU) / 340.0 + 36.53;
     sprintf(buf, "\nTEMP %d: DS=%.1f, MPU=%.1f", total_num_samp_TEMP, c_temp, c_temp_MPU);
     Serial.print(buf);
+    Serial.print("\nNum. EOG Samples = ");
+    Serial.print(total_num_samp_EOG);
+    Serial.print("\nNum. IMU Samples = ");
+    Serial.print(total_num_samp_IMU);
+    Serial.print("\nNum. TEMP Samples = ");
+    Serial.print(total_num_samp_TEMP);
     sample_count_IMU = 0;
   }
 
-  if (total_num_samp_EOG == 1000) {
-    Serial.print("\nNum. EOG Samples = ");
-    Serial.print(total_num_samp_EOG);
-    Serial.print("\nNum. IMU Samples = ");
-    Serial.print(total_num_samp_IMU);
-    Serial.print("\nNum. TEMP Samples = ");
-    Serial.print(total_num_samp_TEMP);
-  }
-    if (total_num_samp_EOG == 1001) {
-    Serial.print("\nNum. EOG Samples = ");
-    Serial.print(total_num_samp_EOG);
-    Serial.print("\nNum. IMU Samples = ");
-    Serial.print(total_num_samp_IMU);
-    Serial.print("\nNum. TEMP Samples = ");
-    Serial.print(total_num_samp_TEMP);
-  }
 }
 
 void MPU_accelgyro() {
