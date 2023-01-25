@@ -41,6 +41,8 @@ float elapsedTime, currentTime, previousTime;
 int c = 0;
 char buf[64];
 MPU6050 mpu;
+// hello hi 
+int x = 0;
 
 void checkSettings()
 {
