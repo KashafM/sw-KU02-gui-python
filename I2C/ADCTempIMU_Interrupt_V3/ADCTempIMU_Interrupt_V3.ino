@@ -129,7 +129,6 @@ void checkSettings()
   Serial.println();
 }
 
-
 void TimerHandler()
 {
   ISR_Timer.run();
@@ -165,8 +164,8 @@ void SampleAll() {
     raw_t = ds1631_temperature();
     c_temp = float(raw_t) / 256;
     c_temp_MPU = float(raw_t_MPU) / 340.0 + 36.53;
-    //    sprintf(buf, "\nTEMP %d: DS=%.1f, MPU=%.1f", total_num_samp_TEMP, c_temp, c_temp_MPU);
-    //    Serial.print(buf);
+    sprintf(buf, "\nTEMP %d: DS=%.1f, MPU=%.1f", total_num_samp_TEMP, c_temp, c_temp_MPU);
+    Serial.print(buf);
     sample_count_IMU = 0;
   }
 
@@ -178,7 +177,14 @@ void SampleAll() {
     Serial.print("\nNum. TEMP Samples = ");
     Serial.print(total_num_samp_TEMP);
   }
-
+    if (sample_count_EOG == 1001) {
+    Serial.print("\nNum. EOG Samples = ");
+    Serial.print(total_num_samp_EOG);
+    Serial.print("\nNum. IMU Samples = ");
+    Serial.print(total_num_samp_IMU);
+    Serial.print("\nNum. TEMP Samples = ");
+    Serial.print(total_num_samp_TEMP);
+  }
 }
 
 void MPU_accelgyro() {
