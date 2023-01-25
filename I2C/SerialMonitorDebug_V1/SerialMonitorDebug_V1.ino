@@ -13,7 +13,7 @@
 // Initialize timer 1
 NRF52Timer ITimer(NRF_TIMER_1);
 NRF52_ISR_Timer ISR_Timer;
-
+// hello hi 
 int adcin1 = A0;
 int adcin2 = A1;
 float adcval1 = 0;
