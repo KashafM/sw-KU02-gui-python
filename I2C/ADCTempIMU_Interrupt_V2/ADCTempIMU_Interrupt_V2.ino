@@ -30,10 +30,10 @@ float c_temp = 0;
 float c_temp_MPU = 0;
 int16_t raw_t = 0;
 int16_t raw_t_MPU = 0;
-float AccX;
-float AccY;
-float AccZ;
+float AccX, AccY, AccZ;
+float AccXcal, AccYcal, AccZcal;
 float GyroX, GyroY, GyroZ;
+float GyroXcal, GyroYcal, GyroZcal;
 float accAngleX, accAngleY, gyroAngleX, gyroAngleY, gyroAngleZ;
 float roll, pitch, yaw;
 float AccErrorX, AccErrorY, GyroErrorX, GyroErrorY, GyroErrorZ;
@@ -41,55 +41,6 @@ float elapsedTime, currentTime, previousTime;
 int c = 0;
 char buf[64];
 MPU6050 mpu;
-
-void setup() {
-  // Set up the analog to digital converter
-  analogReference(AR_VDD4); //Set the analog reference voltage to VDD (3.3 V)
-  analogReadResolution(12); //Set the resolution to 12-bit
-
-  // Set up the serial monitor
-  Serial.begin(115200);
-  delay(100);
-
-  // Set up the DS1631+ temperature sensor
-  Wire.begin(); // Initialize I2C communication
-  Wire.beginTransmission(DS1631_ADDRESS); //Begin data transmission to the DS1631+ sensor
-  Wire.write(0xAC); // Talk to register 172 (0xAC) - configuration
-  Wire.write(0x02); // Set the resolution to 9-bit
-  Wire.beginTransmission(DS1631_ADDRESS); //Begin data transmission to the DS1631+ sensor
-  Wire.write(0x51); // Talk to register 81 (0x51) - start conversions
-  Wire.endTransmission(); // End the transmission
-
-  // Set up the MPU-6050 IMU sensor
-
-  while(!mpu.begin(MPU6050_SCALE_250DPS, MPU6050_RANGE_2G))
-  {
-    Serial.println("Could not find a valid MPU6050 sensor, check wiring!");
-    delay(500);
-  }
-  checkSettings();
-//  Wire.beginTransmission(IMU_ADDRESS); // Begin data transmission to the MPU-6050 sensor (IMU) with address 0x1101000 (104)
-//  Wire.write(0x6B);                  // Talk to the register 6B
-//  Wire.write(0x00);                  // Reset the sensor
-//  Wire.endTransmission(true);        // End the transmission
-//  Wire.beginTransmission(IMU_ADDRESS);       // Configure accel. sensitivity
-//  Wire.write(0x1C);                  // Communicate with the ACCEL_CONFIG register 28 (0x1C)
-//  Wire.write(0x00);                  // Set the register bits as 00000000 (0x18) (+/- 16g full scale range)
-//  Wire.endTransmission(true);        // End the transmission
-//  Wire.beginTransmission(IMU_ADDRESS);
-//  Wire.write(0x1B);                  // Communicate with the GYRO_CONFIG register 27 (0x1B)
-//  Wire.write(0x00);                  // Set the register bits as 00010000 (1000deg/s full scale)
-//  Wire.endTransmission(true);        // End the transmission
-
-  if (ITimer.attachInterruptInterval(HW_TIMER_INTERVAL_MS * 1000, TimerHandler))
-  {
-    Serial.print("Starting Timer OK\n");
-  }
-  else
-    Serial.println("Can't set ITimer. Select another freq. or timer");
-
-  ISR_Timer.setInterval(TIMER_INTERVAL_5MS,  SampleAll);
-}
 
 void checkSettings()
 {
@@ -173,21 +124,21 @@ void MPU_accelgyro() {
   // === Read acceleromter data === //
   Vector rawAccel = mpu.readRawAccel();
   Vector normAccel = mpu.readNormalizeAccel();
-//  AccX = float(rawAccel.XAxis);
-//  AccY = float(rawAccel.YAxis);
-//  AccZ = float(rawAccel.ZAxis);
-    AccX = float(normAccel.XAxis);
-    AccY = float(normAccel.YAxis);
-    AccZ = float(normAccel.ZAxis);
+  AccX = float(rawAccel.XAxis);
+  AccY = float(rawAccel.YAxis);
+  AccZ = float(rawAccel.ZAxis);
+  //    AccX = float(normAccel.XAxis)/16384.0;
+  //    AccY = float(normAccel.YAxis)/16384.0;
+  //    AccZ = float(normAccel.ZAxis)/16384.0;
   // === Read gyroscope data === //
   Vector rawGyro = mpu.readRawGyro();
   Vector normGyro = mpu.readNormalizeGyro();
-//  GyroX = float(rawGyro.XAxis);
-//  GyroY = float(rawGyro.YAxis);
-//  GyroZ = float(rawGyro.ZAxis);
-  GyroX = float(normGyro.XAxis);
-  GyroY = float(normGyro.YAxis);
-  GyroZ = float(normGyro.ZAxis);
+  GyroX = float(rawGyro.XAxis) / 131.0;
+  GyroY = float(rawGyro.YAxis) / 131.0;
+  GyroZ = float(rawGyro.ZAxis) / 131.0;
+  //  GyroX = float(normGyro.XAxis);
+  //  GyroY = float(normGyro.YAxis);
+  //  GyroZ = float(normGyro.ZAxis);
   // Read temperature of sensor
   Wire.beginTransmission(IMU_ADDRESS);
   Wire.write(0x41); // Temp data first register address 0x41
@@ -206,6 +157,69 @@ int16_t ds1631_temperature() {
   // Calculate full temperature (raw value)
   int16_t raw_t = Wire.read() << 8 | Wire.read();
   return raw_t;
+}
+
+void calibrateIMU() {
+  // === Read acceleromter data === //
+  Vector rawAccel = mpu.readRawAccel();
+  AccXcal = float(rawAccel.XAxis);
+  AccYcal = float(rawAccel.YAxis);
+  AccZcal = float(rawAccel.ZAxis);
+  // === Read gyroscope data === //
+  Vector rawGyro = mpu.readRawGyro();
+  GyroXcal = float(rawGyro.XAxis) / 131.0;
+  GyroYcal = float(rawGyro.YAxis) / 131.0;
+  GyroZcal = float(rawGyro.ZAxis) / 131.0;
+}
+
+void setup() {
+  // Set up the analog to digital converter
+  analogReference(AR_VDD4); //Set the analog reference voltage to VDD (3.3 V)
+  analogReadResolution(12); //Set the resolution to 12-bit
+
+  // Set up the serial monitor
+  Serial.begin(115200);
+  delay(100);
+
+  // Set up the DS1631+ temperature sensor
+  Wire.begin(); // Initialize I2C communication
+  Wire.beginTransmission(DS1631_ADDRESS); //Begin data transmission to the DS1631+ sensor
+  Wire.write(0xAC); // Talk to register 172 (0xAC) - configuration
+  Wire.write(0x02); // Set the resolution to 9-bit
+  Wire.beginTransmission(DS1631_ADDRESS); //Begin data transmission to the DS1631+ sensor
+  Wire.write(0x51); // Talk to register 81 (0x51) - start conversions
+  Wire.endTransmission(); // End the transmission
+
+  // Set up the MPU-6050 IMU sensor
+
+  while (!mpu.begin(MPU6050_SCALE_250DPS, MPU6050_RANGE_2G))
+  {
+    Serial.println("Could not find a valid MPU6050 sensor, check wiring!");
+    delay(500);
+  }
+  checkSettings();
+  //  Wire.beginTransmission(IMU_ADDRESS); // Begin data transmission to the MPU-6050 sensor (IMU) with address 0x1101000 (104)
+  //  Wire.write(0x6B);                  // Talk to the register 6B
+  //  Wire.write(0x00);                  // Reset the sensor
+  //  Wire.endTransmission(true);        // End the transmission
+  //  Wire.beginTransmission(IMU_ADDRESS);       // Configure accel. sensitivity
+  //  Wire.write(0x1C);                  // Communicate with the ACCEL_CONFIG register 28 (0x1C)
+  //  Wire.write(0x00);                  // Set the register bits as 00000000 (0x18) (+/- 16g full scale range)
+  //  Wire.endTransmission(true);        // End the transmission
+  //  Wire.beginTransmission(IMU_ADDRESS);
+  //  Wire.write(0x1B);                  // Communicate with the GYRO_CONFIG register 27 (0x1B)
+  //  Wire.write(0x00);                  // Set the register bits as 00010000 (1000deg/s full scale)
+  //  Wire.endTransmission(true);        // End the transmission
+  calibrateIMU();
+
+  if (ITimer.attachInterruptInterval(HW_TIMER_INTERVAL_MS * 1000, TimerHandler))
+  {
+    Serial.print("Starting Timer OK\n");
+  }
+  else
+    Serial.println("Can't set ITimer. Select another freq. or timer");
+
+  ISR_Timer.setInterval(TIMER_INTERVAL_5MS,  SampleAll);
 }
 
 void loop() {
