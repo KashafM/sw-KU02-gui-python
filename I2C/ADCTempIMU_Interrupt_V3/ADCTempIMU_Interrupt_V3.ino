@@ -9,7 +9,7 @@
 #define HW_TIMER_INTERVAL_MS      1
 #define TIMER_INTERVAL_5MS             5L
 #define DS1631_ADDRESS  0x48
-#define IMU_ADDRESS  0x69
+#define IMU_ADDRESS  0x68
 
 // Initialize timer 1
 NRF52Timer ITimer(NRF_TIMER_1);
@@ -169,7 +169,7 @@ void SampleAll() {
     sample_count_IMU = 0;
   }
 
-  if (sample_count_EOG == 1000) {
+  if (total_num_samp_EOG == 1000) {
     Serial.print("\nNum. EOG Samples = ");
     Serial.print(total_num_samp_EOG);
     Serial.print("\nNum. IMU Samples = ");
@@ -177,7 +177,7 @@ void SampleAll() {
     Serial.print("\nNum. TEMP Samples = ");
     Serial.print(total_num_samp_TEMP);
   }
-    if (sample_count_EOG == 1001) {
+    if (total_num_samp_EOG == 1001) {
     Serial.print("\nNum. EOG Samples = ");
     Serial.print(total_num_samp_EOG);
     Serial.print("\nNum. IMU Samples = ");
