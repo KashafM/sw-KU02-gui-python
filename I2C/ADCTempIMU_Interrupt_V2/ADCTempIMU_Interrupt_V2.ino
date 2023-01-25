@@ -14,7 +14,6 @@
 // Initialize timer 1
 NRF52Timer ITimer(NRF_TIMER_1);
 NRF52_ISR_Timer ISR_Timer;
-// hello hi
 int adcin1 = A0;
 int adcin2 = A1;
 float adcval1 = 0;
@@ -41,6 +40,7 @@ float AccErrorX, AccErrorY, GyroErrorX, GyroErrorY, GyroErrorZ;
 float elapsedTime, currentTime, previousTime;
 int c = 0;
 char buf[64];
+MPU6050 mpu;
 
 void setup() {
   // Set up the analog to digital converter
@@ -61,18 +61,25 @@ void setup() {
   Wire.endTransmission(); // End the transmission
 
   // Set up the MPU-6050 IMU sensor
-  Wire.beginTransmission(IMU_ADDRESS); // Begin data transmission to the MPU-6050 sensor (IMU) with address 0x1101000 (104)
-  Wire.write(0x6B);                  // Talk to the register 6B
-  Wire.write(0x00);                  // Reset the sensor
-  Wire.endTransmission(true);        // End the transmission
-  Wire.beginTransmission(IMU_ADDRESS);       // Configure accel. sensitivity
-  Wire.write(0x1C);                  // Communicate with the ACCEL_CONFIG register 28 (0x1C)
-  Wire.write(0x00);                  // Set the register bits as 00000000 (0x18) (+/- 16g full scale range)
-  Wire.endTransmission(true);        // End the transmission
-  Wire.beginTransmission(IMU_ADDRESS);
-  Wire.write(0x1B);                  // Communicate with the GYRO_CONFIG register 27 (0x1B)
-  Wire.write(0x00);                  // Set the register bits as 00010000 (1000deg/s full scale)
-  Wire.endTransmission(true);        // End the transmission
+
+  while(!mpu.begin(MPU6050_SCALE_250DPS, MPU6050_RANGE_2G))
+  {
+    Serial.println("Could not find a valid MPU6050 sensor, check wiring!");
+    delay(500);
+  }
+  checkSettings();
+//  Wire.beginTransmission(IMU_ADDRESS); // Begin data transmission to the MPU-6050 sensor (IMU) with address 0x1101000 (104)
+//  Wire.write(0x6B);                  // Talk to the register 6B
+//  Wire.write(0x00);                  // Reset the sensor
+//  Wire.endTransmission(true);        // End the transmission
+//  Wire.beginTransmission(IMU_ADDRESS);       // Configure accel. sensitivity
+//  Wire.write(0x1C);                  // Communicate with the ACCEL_CONFIG register 28 (0x1C)
+//  Wire.write(0x00);                  // Set the register bits as 00000000 (0x18) (+/- 16g full scale range)
+//  Wire.endTransmission(true);        // End the transmission
+//  Wire.beginTransmission(IMU_ADDRESS);
+//  Wire.write(0x1B);                  // Communicate with the GYRO_CONFIG register 27 (0x1B)
+//  Wire.write(0x00);                  // Set the register bits as 00010000 (1000deg/s full scale)
+//  Wire.endTransmission(true);        // End the transmission
 
   if (ITimer.attachInterruptInterval(HW_TIMER_INTERVAL_MS * 1000, TimerHandler))
   {
@@ -139,7 +146,7 @@ void SampleAll() {
   SampleEOG();
   sample_count_EOG = sample_count_EOG + 1;
   total_num_samp_EOG = total_num_samp_EOG + 1;
-  sprintf(buf, "\nEOG %d: A0 = %f, A1 = %f", total_num_samp_EOG,adcval1, adcval2);
+  sprintf(buf, "\nEOG %d: A0 = %f, A1 = %f", total_num_samp_EOG, adcval1, adcval2);
   Serial.print(buf);
 
   if (sample_count_EOG == 2) {
@@ -154,7 +161,7 @@ void SampleAll() {
     total_num_samp_TEMP = total_num_samp_TEMP + 1;
     raw_t = ds1631_temperature();
     c_temp = float(raw_t) / 256;
-    c_temp_MPU = float(raw_t_MPU)/340.0 + 36.53;
+    c_temp_MPU = float(raw_t_MPU) / 340.0 + 36.53;
     sprintf(buf, "\nTEMP %d: DS=%.1f, MPU=%.1f", total_num_samp_TEMP, c_temp, c_temp_MPU);
     Serial.print(buf);
     sample_count_IMU = 0;
@@ -166,20 +173,29 @@ void MPU_accelgyro() {
   // === Read acceleromter data === //
   Vector rawAccel = mpu.readRawAccel();
   Vector normAccel = mpu.readNormalizeAccel();
-  AccX = float(rawAccel.XAxis);
-  AccY = float(rawAccel.YAxis);
-  AccZ = float(rawAccel.ZAxis);
-  AccX = float(normAccel.XAxis);
-  AccY = float(normAccel.YAxis);
-  AccZ = float(normAccel.ZAxis);
+//  AccX = float(rawAccel.XAxis);
+//  AccY = float(rawAccel.YAxis);
+//  AccZ = float(rawAccel.ZAxis);
+    AccX = float(normAccel.XAxis);
+    AccY = float(normAccel.YAxis);
+    AccZ = float(normAccel.ZAxis);
   // === Read gyroscope data === //
-  
+  Vector rawGyro = mpu.readRawGyro();
+  Vector normGyro = mpu.readNormalizeGyro();
+//  GyroX = float(rawGyro.XAxis);
+//  GyroY = float(rawGyro.YAxis);
+//  GyroZ = float(rawGyro.ZAxis);
+  GyroX = float(normGyro.XAxis);
+  GyroY = float(normGyro.YAxis);
+  GyroZ = float(normGyro.ZAxis);
   // Read temperature of sensor
   Wire.beginTransmission(IMU_ADDRESS);
-  Wire.write(0x41); // Gyro data first register address 0x43
+  Wire.write(0x41); // Temp data first register address 0x41
   Wire.endTransmission(false);
   Wire.requestFrom(IMU_ADDRESS, 2, true); // Read 4 registers total, each axis value is stored in 2 registers
+  // Calculate full temperature (raw value)
   raw_t_MPU = Wire.read() << 8 | Wire.read(); // For a 250deg/s range we have to divide first the raw value by 131.0, according to the datasheet
+  //float temp = mpu.readTemperature();
 }
 
 int16_t ds1631_temperature() {
@@ -187,8 +203,7 @@ int16_t ds1631_temperature() {
   Wire.write(0xAA);                       // read temperature command
   Wire.endTransmission(false);            // send repeated start condition
   Wire.requestFrom(DS1631_ADDRESS, 2);    // request 2 bytes from DS1631 and release I2C bus at end of reading
-
-  // calculate full temperature (raw value)
+  // Calculate full temperature (raw value)
   int16_t raw_t = Wire.read() << 8 | Wire.read();
   return raw_t;
 }
