@@ -58,13 +58,14 @@ void SampleAll() {
   sample_count_EOG = sample_count_EOG + 1;
   total_num_samp_EOG = total_num_samp_EOG + 1;
   sprintf(buf, "\nEOG %d: A0 = %f, A1 = %f", total_num_samp_EOG,adcval1, adcval2);
+  Serial.print(buf);
 
   if (sample_count_EOG == 2) {
     total_num_samp_IMU = total_num_samp_IMU + 1;
     sample_count_IMU = sample_count_IMU + 1;
     MPU_accelgyro();
     sprintf(buf, "\nIMU %d: Ax=%.1f, Ay=%.1f, Az=%.1f, Gx=%.1f, Gy=%.1f, Gz=%.1f", total_num_samp_IMU, AccX, AccY, AccZ, GyroX, GyroY, GyroZ);
-    printf(buf);
+    Serial.print(buf);
     sample_count_EOG = 0;
   }
   if (sample_count_IMU == 100) {
@@ -78,7 +79,6 @@ void SampleAll() {
   }
 
 }
-
 
 void MPU_accelgyro() {
   // === Read acceleromter data === //
