@@ -156,7 +156,7 @@ void setup() {
   analogReadResolution(12); // Set the resolution to 12-bit
 
   // Set up the serial monitor
-  Serial.begin(9600);
+  Serial.begin(115200);
   delay(100);
 
   // Set up the DS1631+ temperature sensor
