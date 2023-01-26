@@ -13,13 +13,13 @@
 #define DS1631_ADDRESS  0x48 // Address of the temperature sensor
 #define IMU_ADDRESS  0x68 // Address of the IMU sensor
 
-// Initialize timer 1 for use with an interrupt
+// Initialize timer 1 for suse with an interrupt
 NRF52Timer ITimer(NRF_TIMER_1);
 NRF52_ISR_Timer ISR_Timer;
 
-// Define global variables 
-int adcin1 = A0; // Pin connected to analog voltage input (EOG) 1 
-int adcin2 = A1; // Pin connected to analog voltage input (EOG) 1 
+// Define global variables
+int adcin1 = A0; // Pin connected to analog voltage input (EOG) 1
+int adcin2 = A1; // Pin connected to analog voltage input (EOG) 1
 float adcval1 = 0; // For storing the voltage on pin A0
 float adcval2 = 0; // For storing the voltage on pin A1
 float V_A0 = 0; // Digital voltage reading from pin A0
@@ -95,7 +95,7 @@ void SampleEOG() {
 
 // ISR function for sampling EOG, temperature, and accelerometer data with the following sampling periods: 5 ms, 10 ms, and 1 ms
 void SampleAll() {
-  SampleEOG(); 
+  SampleEOG();
   sample_count_EOG = sample_count_EOG + 1;
   total_num_samp_EOG = total_num_samp_EOG + 1;
 
@@ -110,11 +110,11 @@ void SampleAll() {
     raw_t = ds1631_temperature();
     c_temp = float(raw_t) / 256;
     c_temp_MPU = float(raw_t_MPU) / 340.0 + 36.53;
-    sprintf(buf, "\nEOG %d: A0 = %f, A1 = %f", total_num_samp_EOG, V_A0, V_A1);
+    sprintf(buf, "\nE%d: %.1f %.1f", total_num_samp_EOG, V_A0, V_A1);
     Serial.print(buf);
-    sprintf(buf, "\nIMU %d: Ax=%.1f, Ay=%.1f, Az=%.1f, Gx=%.1f, Gy=%.1f, Gz=%.1f", total_num_samp_IMU, AccX, AccY, AccZ, GyroX, GyroY, GyroZ);
+    sprintf(buf, "\nA%d: %.1f %.1f %.1f\nG%d: %.1f %.1f %.1f", total_num_samp_IMU,AccX, AccY, AccZ, total_num_samp_IMU, GyroX, GyroY, GyroZ);
     Serial.print(buf);
-    sprintf(buf, "\nTEMP %d: DS=%.1f, MPU=%.1f", total_num_samp_TEMP, c_temp, c_temp_MPU);
+    sprintf(buf, "\nT%d: %.1f %.1f", total_num_samp_TEMP, c_temp, c_temp_MPU);
     Serial.print(buf);
     sample_count_IMU = 0;
   }
@@ -122,13 +122,13 @@ void SampleAll() {
 
 void MPU_accelgyro() {
   // Sample gyroscope data
-  Vector rawAccel = mpu.readRawAccel(); // Read in the raw accelerometer voltages 
+  Vector rawAccel = mpu.readRawAccel(); // Read in the raw accelerometer voltages
   Vector normAccel = mpu.readNormalizeAccel();
   AccX = float(rawAccel.XAxis) / 16384.0;
   AccY = float(rawAccel.YAxis) / 16384.0;
   AccZ = float(rawAccel.ZAxis) / 16384.0;
   // Sample gyroscope data
-  Vector rawGyro = mpu.readRawGyro(); // Read in the raw gyroscope voltages 
+  Vector rawGyro = mpu.readRawGyro(); // Read in the raw gyroscope voltages
   Vector normGyro = mpu.readNormalizeGyro();
   GyroX = float(rawGyro.XAxis) / 131.0;
   GyroY = float(rawGyro.YAxis) / 131.0;
@@ -156,7 +156,7 @@ void setup() {
   analogReadResolution(12); // Set the resolution to 12-bit
 
   // Set up the serial monitor
-  Serial.begin(115200);
+  Serial.begin(9600);
   delay(100);
 
   // Set up the DS1631+ temperature sensor
