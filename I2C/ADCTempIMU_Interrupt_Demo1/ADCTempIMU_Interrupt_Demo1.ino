@@ -36,7 +36,9 @@ int16_t raw_t = 0; // For storing the raw reading from the DS1631+ temperature s
 int16_t raw_t_MPU = 0; // For storing the raw reading from the temperature sensor in the MPU-6050 IMU
 float AccX, AccY, AccZ; // For storing raw readings from all three axes of the accelerometer
 float GyroX, GyroY, GyroZ; // For storing raw readings from all three axes of the gyroscope
-char buf[64];
+char buf1[64];
+char buf2[64];
+char buf3[64];
 MPU6050 mpu;
 
 // Function for checking and printing the settings of the MPU-6050 sensor. From the MPU6050 library
@@ -110,12 +112,15 @@ void SampleAll() {
     raw_t = ds1631_temperature();
     c_temp = float(raw_t) / 256;
     c_temp_MPU = float(raw_t_MPU) / 340.0 + 36.53;
-    sprintf(buf, "\nE%d: %.1f %.1f", total_num_samp_EOG, V_A0, V_A1);
-    Serial.print(buf);
-    sprintf(buf, "\nA%d: %.1f %.1f %.1f\nG%d: %.1f %.1f %.1f", total_num_samp_IMU,AccX, AccY, AccZ, total_num_samp_IMU, GyroX, GyroY, GyroZ);
-    Serial.print(buf);
-    sprintf(buf, "\nT%d: %.1f %.1f", total_num_samp_TEMP, c_temp, c_temp_MPU);
-    Serial.print(buf);
+    sprintf(buf1, "\nE%d: %.1f %.1f", total_num_samp_EOG, V_A0, V_A1);
+    Serial.print(buf1);
+    delay(1);
+    sprintf(buf2, "\nA%d: %.1f %.1f %.1f\nG%d: %.1f %.1f %.1f", total_num_samp_IMU, AccX, AccY, AccZ, total_num_samp_IMU, GyroX, GyroY, GyroZ);
+    Serial.print(buf2);
+    delay(1);
+    sprintf(buf3, "\nT%d: %.1f %.1f", total_num_samp_TEMP, c_temp, c_temp_MPU);
+    Serial.print(buf3);
+    delay(1);
     sample_count_IMU = 0;
   }
 }
