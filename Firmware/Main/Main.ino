@@ -13,8 +13,8 @@
 #include "NRF52_ISR_Timer.h"
 
 //using namespace Adafruit_LittleFS_Namespace;
-#define FILENAME    "/adafruit.txt"
-#define CONTENTS    "Wow even the flash memory works"
+#define FILENAME    "/adafruit2.txt"
+#define CONTENTS    "Wow even the flash memory works\n"
 #define TIMER_INTERRUPT_DEBUG 0
 #define HW_TIMER_INTERVAL_MS      1 // Hardware timer period in ms
 #define TIMER_INTERVAL_5MS             5L // EOG sampling period in ms (interrupt timer period)
@@ -57,13 +57,13 @@ char buf[64];
 MPU6050 mpu;
 uint8_t  bps = 0;
 bool SD_good;
+bool sampling = false;
 int menuChoice;
 
 void LCDsetup() {
   lcd.init();
   lcd.clear();
   lcd.backlight();      // Make sure backlight is on
-  //lcd.noBacklight();
 
   // Print a message on both lines of the LCD.
   lcd.setCursor(2, 0);  //Set cursor to character 2 on line 0
@@ -160,11 +160,12 @@ void setup()
   Serial.begin(115200);
   delay(100);
   InternalFS.begin();
-  pinMode(7, OUTPUT);
+  pinMode(ITSY_TESTPULSE_PIN, OUTPUT);
   pinMode(13, OUTPUT);
   pinMode(12, INPUT_PULLDOWN);
   LCDsetup();
   SD_good = setupSD();
+  digitalWrite(ITSY_TESTPULSE_PIN, LOW);
 
   // Set up the analog to digital converter
   analogReference(AR_VDD4); // Set the analog reference voltage to VDD (3.3 V)
@@ -178,9 +179,10 @@ void setup()
     Serial.print("Starting Timer OK\n");
   }
   else
-    Serial.println("Can't set ITimer. Select another freq. or timer");
-
+  Serial.println("Can't set ITimer. Select another freq. or timer");
   ISR_Timer.setInterval(TIMER_INTERVAL_5MS,  SampleAll);
+  ITimer.disableTimer();
+  ISR_Timer.disableAll();
   // Initialise the Bluefruit module
   Serial.println("Initialise the Bluefruit nRF52 module");
   Bluefruit.begin();
@@ -418,13 +420,14 @@ void SampleAll() {
   SampleEOG(); 
   sample_count_EOG = sample_count_EOG + 1;
   total_num_samp_EOG = total_num_samp_EOG + 1;
-  sprintf(buf, "\nEOG %d: A0 = %f, A1 = %f", total_num_samp_EOG, V_A0, V_A1);
-  Serial.print(buf);
+  
 
   if (sample_count_EOG == 2) {
     total_num_samp_IMU = total_num_samp_IMU + 1;
     sample_count_IMU = sample_count_IMU + 1;
     MPU_accelgyro();
+    sprintf(buf, "\nEOG %d: A0 = %f, A1 = %f", total_num_samp_EOG, V_A0, V_A1);
+    Serial.print(buf);
     sprintf(buf, "\nIMU %d: Ax=%.1f, Ay=%.1f, Az=%.1f, Gx=%.1f, Gy=%.1f, Gz=%.1f", total_num_samp_IMU, AccX, AccY, AccZ, GyroX, GyroY, GyroZ);
     Serial.print(buf);
     sample_count_EOG = 0;
@@ -438,6 +441,7 @@ void SampleAll() {
     Serial.print(buf);
     sample_count_IMU = 0;
   }
+  
 }
 
 void MPU_accelgyro() {
@@ -472,7 +476,6 @@ int16_t ds1631_temperature() {
 
 void loop()
 {
-  Serial.println(digitalRead(12));
   Serial.println();
   Serial.println();
   Serial.println();
@@ -482,10 +485,8 @@ void loop()
   Serial.println("3. Fun LCD");
   Serial.println("4. Write Internal FLash");
   Serial.println("5. Read Internal FLash");
-  Serial.println("6. Current Temp");
-  Serial.println("7. IMU");
-  Serial.println("8. Run POST Circuit");
-  Serial.println("9. BLE");
+  Serial.println("6. Run POST Circuit");
+  Serial.println("7. BLE");
 
 
   while (Serial.available() == 0) {
@@ -495,22 +496,19 @@ void loop()
   Serial.parseInt();
   switch (menuChoice) {
     case 1:
-
       Serial.print("SD Card Demo Read: ");
       SDRead("BME_DEMO.txt");
       break;
 
     case 2:
-
       Serial.print("Text written to SD: ");
       SDWrite("I can't beleive it worked!", "BME_DEMO.txt");
       break;
 
     case 3:
-
       Serial.print("Fun LCD: ");
       printLCD("UMAPATHY IS THE ", 0, 0, true);
-      printLCD("BEST FLC AT TMU", 0, 1, false);
+      printLCD("BEST FLC!!!!!!!!!!!!", 0, 1, false);
       break;
     case 4:
       writeInternal();
@@ -519,17 +517,11 @@ void loop()
       readInternal();
       break;
     case 6:
-      printLCD("Temp: Too Hot");
-      break;
-    case 7:
-      printLCD("IMU");
-      break;
-    case 8:
-      printLCD("Pulse On");
+      printLCD("Pulse On", 0, 0, 1);
       testCircuit(1);
       break;
 
-    case 9:
+    case 7:
       Serial.println("Searching for Connection");
       while (1)
       {
