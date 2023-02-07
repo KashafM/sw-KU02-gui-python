@@ -18,7 +18,7 @@ NRF52Timer ITimer(NRF_TIMER_1);
 NRF52_ISR_Timer ISR_Timer;
 
 // Define global variables
-int print_setting = 1;
+int print_setting = 2;
 int adcin1 = A0; // Pin connected to analog voltage input (EOG) 1
 int adcin2 = A1; // Pin connected to analog voltage input (EOG) 1
 float adcval1 = 0; // For storing the voltage on pin A0
