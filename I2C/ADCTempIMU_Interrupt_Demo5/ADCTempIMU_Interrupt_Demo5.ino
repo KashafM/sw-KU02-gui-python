@@ -37,6 +37,12 @@ int16_t raw_t = 0; // For storing the raw reading from the DS1631+ temperature s
 int16_t raw_t_MPU = 0; // For storing the raw reading from the temperature sensor in the MPU-6050 IMU
 float AccX, AccY, AccZ; // For storing raw readings from all three axes of the accelerometer
 float GyroX, GyroY, GyroZ; // For storing raw readings from all three axes of the gyroscope
+float error_Ax = 0;
+float error_Ay = 0;
+float error_Az = 0;
+float error_Gx = 0;
+float error_Gy = 0;
+float error_Gz = 0;
 char buf1[64];
 char buf2[64];
 char buf3[64];
@@ -131,16 +137,16 @@ void SampleAll() {
 void MPU_accelgyro() {
   // Sample gyroscope data
   Vector rawAccel = mpu.readRawAccel(); // Read in the raw accelerometer voltages
-  Vector normAccel = mpu.readNormalizeAccel();
-  AccX = float(rawAccel.XAxis) / 16384.0;
-  AccY = float(rawAccel.YAxis) / 16384.0;
-  AccZ = float(rawAccel.ZAxis) / 16384.0;
+  //Vector normAccel = mpu.readNormalizeAccel();
+  AccX = rawAccel.XAxis - error_Ax;
+  AccY = rawAccel.YAxis - error_Ay;
+  AccZ = rawAccel.ZAxis - error_Az;
   // Sample gyroscope data
   Vector rawGyro = mpu.readRawGyro(); // Read in the raw gyroscope voltages
-  Vector normGyro = mpu.readNormalizeGyro();
-  GyroX = float(rawGyro.XAxis) / 131.0;
-  GyroY = float(rawGyro.YAxis) / 131.0;
-  GyroZ = float(rawGyro.ZAxis) / 131.0;
+  //Vector normGyro = mpu.readNormalizeGyro();
+  GyroX = rawGyro.XAxis - error_Gx;
+  GyroY = rawGyro.YAxis - error_Gy;
+  GyroZ = rawGyro.ZAxis - error_Gz;
   // Read the temperature of the MPU-6050 sensor
   Wire.beginTransmission(IMU_ADDRESS); // Begin transmission to the IMU sensor
   Wire.write(0x41); // Write the address of the first temperature data register (0x41)
@@ -158,7 +164,70 @@ int16_t ds1631_temperature() {
   return raw_t;
 }
 
+void calibrate_IMU() {
+
+  int samp_count_cal = 0;
+
+  Serial.print("IMU calibration in progress. Place the breadboard flat on a table. Do not move the breadboard.");
+
+  // We can call this funtion in the setup section to calculate the accelerometer and gyro data error. From here we will get the error values used in the above equations printed on the Serial Monitor.
+  // Note that we should place the IMU flat in order to get the proper values, so that we then can the correct values
+  // Read accelerometer values 200 times
+  while (samp_count_cal < 200) {
+    Vector rawAccel = mpu.readRawAccel();
+    AccX = rawAccel.XAxis;
+    AccY = rawAccel.YAxis;
+    AccZ = rawAccel.ZAxis;
+    // Sum all readings
+    error_Ax = error_Ax + (AccX); //; ((atan((AccY) / sqrt(pow((AccX), 2) + pow((AccZ), 2))) * 180 / PI));
+    error_Ay = error_Ay + (AccY); // ((atan(-1 * (AccX) / sqrt(pow((AccY), 2) + pow((AccZ), 2))) * 180 / PI));
+    error_Az = error_Az + (AccZ);
+    delay(5);
+    samp_count_cal++;
+  }
+  //Divide the sum by 200 to get the error value
+  error_Ax = error_Ax / 200;
+  error_Ay = error_Ay / 200;
+  error_Az = (error_Az / 200) - 1;
+
+  samp_count_cal = 0;
+  mpu.calibrateGyro();
+  // Read gyro values 200 times
+  while (samp_count_cal < 200) {
+    Vector rawGyro = mpu.readRawGyro(); // Read in the raw gyroscope voltages
+    GyroX = float(rawGyro.XAxis);
+    GyroY = float(rawGyro.YAxis);
+    GyroZ = float(rawGyro.ZAxis);
+    // Sum all readings
+    error_Gx = error_Gx + (GyroX);
+    error_Gy = error_Gy + (GyroY);
+    error_Gz = error_Gz + (GyroZ);
+    delay(5);
+    samp_count_cal++;
+  }
+  //Divide the sum by 200 to get the error value
+  error_Gx = error_Gx / 200;
+  error_Gy = error_Gy / 200;
+  error_Gz = error_Gz / 200;
+  // Print the error values on the Serial Monitor
+  Serial.print("\nIMU calibration complete. Sampling starting.");
+  Serial.print("\nError Ax: ");
+  Serial.print(error_Ax);
+  Serial.print("\nError Ay: ");
+  Serial.print(error_Ay);
+  Serial.print("\nError Az: ");
+  Serial.print(error_Az);
+  Serial.print("\nError Gx: ");
+  Serial.print(error_Gx);
+  Serial.print("\nError Gy: ");
+  Serial.print(error_Gy);
+  Serial.print("\nError Gz: ");
+  Serial.print(error_Gz);
+  delay(1000);
+}
+
 void setup() {
+    
   // Set up the analog to digital converter
   analogReference(AR_VDD4); // Set the analog reference voltage to VDD (3.3 V)
   analogReadResolution(12); // Set the resolution to 12-bit
@@ -177,18 +246,20 @@ void setup() {
   Wire.endTransmission(); // End the transmission
 
   // Set up the MPU-6050 IMU sensor
-
+  delay(5000);
   while (!mpu.begin(MPU6050_SCALE_250DPS, MPU6050_RANGE_2G))
   {
     Serial.println("Could not find a valid MPU6050 sensor, check wiring!");
     delay(500);
   }
   checkSettings();
+  calibrate_IMU();
+
 
   // Set up the timer-driven interrupt
   if (ITimer.attachInterruptInterval(HW_TIMER_INTERVAL_MS * 1000, TimerHandler))
   {
-    Serial.print("Starting Timer OK\n");
+    Serial.print("\nTimer started\n");
   }
   else
     Serial.println("Can't set ITimer. Select another freq. or timer");
