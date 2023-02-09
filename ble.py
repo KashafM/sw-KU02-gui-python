@@ -1,10 +1,8 @@
-# imports
 import simplepyble
+import time
 
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
+if __name__ == "__main__":
     adapters = simplepyble.Adapter.get_adapters()
-    adapter = adapters[0]
 
     if len(adapters) == 0:
         print("No adapters found")
@@ -41,9 +39,23 @@ if __name__ == '__main__':
 
     print("Successfully connected, listing services...")
     services = peripheral.services()
+    service_characteristic_pair = []
     for service in services:
-        print(f"Service: {service.uuid}")
-        for characteristic in service.characteristics:
-            print(f"    Characteristic: {characteristic}")
+       #print(service.characteristics.getattribute__dir__())
+
+        service_characteristic_pair.append((service.uuid, service.characteristics))
+
+    # Query the user to pick a service/characteristic pair
+    print("Please select a service/characteristic pair:")
+    for i, (service_uuid, characteristic) in enumerate(service_characteristic_pair):
+        print(f"{i}: {service_uuid} {characteristic}")
+
+    choice = int(input("Enter choice: "))
+    service_uuid, characteristic_uuid = service_characteristic_pair[choice]
+
+    # Write the content to the characteristic
+    contents = peripheral.notify(service_uuid, characteristic_uuid, lambda data: print(f"Notification: {data}"))
+
+    time.sleep(5)
 
     peripheral.disconnect()

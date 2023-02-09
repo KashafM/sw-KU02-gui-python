@@ -15,6 +15,7 @@ void SampleAll() {
 
   if (sample_IMU == 2) {
     total_num_samp_IMU = total_num_samp_IMU + 1;
+    
     MPU_accelgyro();
     //current_chunk_sample.AccX[sample_count_IMU] = AccX;
     //current_chunk_sample.AccY[sample_count_IMU] = AccY;
@@ -34,13 +35,17 @@ void SampleAll() {
     sample_count_IMU = 0;
     total_chunk_samp = 0;
     
-    current_chunk_sample.header = "This is the Header";
+    current_chunk_sample.run = run_number;
+    current_chunk_sample.number = chunk_num;
     current_chunk_sample.done_sampling = true;
+    chunk_num ++;
     digitalToggle(LED_RED);
   }
   if (current_chunk_sample.done_sampling){
-    chunks.push(current_chunk_sample);
-    
+    if(tail < 10){
+      Q[tail] = current_chunk_sample;
+      tail++;
+    }
     current_chunk_sample.done_sampling = false;
     sample_IMU = 0;
   } 

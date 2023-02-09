@@ -4,7 +4,6 @@
 void BLESetup(){
   Serial.println("Initialise the Bluefruit nRF52 module");
   Bluefruit.begin();
-
   // Set the connect/disconnect callback handlers
   Bluefruit.Periph.setConnectCallback(connect_callback);
   Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
@@ -12,21 +11,17 @@ void BLESetup(){
   // Configure and Start the Device Information Service
   Serial.println("Configuring the Device Information Service");
   bledis.setManufacturer("Adafruit Industries");
-  bledis.setModel("ItsyBitsy"); //Bluefruit Feather52
+  bledis.setModel("ItsyBitsy");
   bledis.begin();
 
-  // Start the BLE Battery Service and set it to 100%
-  Serial.println("Configuring the Battery Service");
-  blebas.begin();
-  blebas.write(100);
-
-  // Setup the Heart Rate Monitor service using
+  // Setup the service using
   // BLEService and BLECharacteristic classes
   Serial.println("Configuring the Service");
   setupEOGService();
   // Setup the advertising packet(s)
   Serial.println("Setting up the advertising payload(s)");
   startAdv();
+  Bluefruit.Advertising.stop();
   
 
   Serial.println("\nAdvertising");
@@ -57,6 +52,7 @@ void startAdv(void)
   Bluefruit.Advertising.setInterval(32, 244);    // in unit of 0.625 ms
   Bluefruit.Advertising.setFastTimeout(30);      // number of seconds in fast mode
   Bluefruit.Advertising.start(0);                // 0 = Don't stop advertising after n seconds
+  
 }
 
 void setupEOGService(void)
@@ -85,10 +81,10 @@ void setupEOGService(void)
   //    B6:7    = UINT16 - RR Internal (1/1024 second resolution)
   eog_characertistic.setProperties(CHR_PROPS_NOTIFY);
   eog_characertistic.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
-  eog_characertistic.setFixedLen(2);
+  eog_characertistic.setMaxLen(20); // new
   eog_characertistic.setCccdWriteCallback(cccd_callback);  // Optionally capture CCCD updates
   eog_characertistic.begin();
-  uint8_t eogbledata[2] = { 0b00000110, 0x40 }; // Set the characteristic to use 8-bit values, with the sensor connected and detected
-  eog_characertistic.write(eogbledata, 2);
+  uint8_t eogbledata[20] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+  eog_characertistic.write(eogbledata, 20);
 }
 

@@ -4,26 +4,17 @@
 
 MPU6050 mpu;
 
-bool setupMPU(){
+String setupMPU(){
   // Set up the MPU-6050 IMU sensor
-  bool MPU_good = true;
   Serial.println("Initializing Inertial Motion Unit...");
   if (!mpu.begin(MPU6050_SCALE_250DPS, MPU6050_RANGE_2G)){
     Serial.println("Could not find a valid MPU6050 sensor, check wiring!");
-    MPU_good = false;
+    return ("IMU Error ");
   }
   else{
     checkSettingsMPU();
   }
-  /*
-  while (!mpu.begin(MPU6050_SCALE_250DPS, MPU6050_RANGE_2G))
-  {
-    Serial.println("Could not find a valid MPU6050 sensor, check wiring!");
-    delay(500);
-  }
-  */
-  
-  return MPU_good;
+  return "";
 }
 
 // Function for checking and printing the settings of the MPU-6050 sensor. From the MPU6050 library
@@ -69,15 +60,21 @@ void MPU_accelgyro() {
   // Sample gyroscope data
   Vector rawAccel = mpu.readRawAccel(); // Read in the raw accelerometer voltages 
   Vector normAccel = mpu.readNormalizeAccel();
-  AccX = float(rawAccel.XAxis) / 16384.0;
-  AccY = float(rawAccel.YAxis) / 16384.0;
-  AccZ = float(rawAccel.ZAxis) / 16384.0;
+  AccX.x = rawAccel.XAxis;
+  AccY.x = rawAccel.YAxis;
+  AccZ.x = rawAccel.ZAxis;
+  //AccX = float(rawAccel.XAxis) / 16384.0;
+  //AccY = float(rawAccel.YAxis) / 16384.0;
+  //AccZ = float(rawAccel.ZAxis) / 16384.0;
   // Sample gyroscope data
   Vector rawGyro = mpu.readRawGyro(); // Read in the raw gyroscope voltages 
   Vector normGyro = mpu.readNormalizeGyro();
-  GyroX = float(rawGyro.XAxis) / 131.0;
-  GyroY = float(rawGyro.YAxis) / 131.0;
-  GyroZ = float(rawGyro.ZAxis) / 131.0;
+  GyroX.x = rawGyro.XAxis;
+  GyroY.x = rawGyro.YAxis;
+  GyroZ.x = rawGyro.ZAxis;
+  //GyroX = float(rawGyro.XAxis) / 131.0;
+  //GyroY = float(rawGyro.YAxis) / 131.0;
+  //GyroZ = float(rawGyro.ZAxis) / 131.0;
   // Read the temperature of the MPU-6050 sensor
   Wire.beginTransmission(IMU_ADDRESS); // Begin transmission to the IMU sensor
   Wire.write(0x41); // Write the address of the first temperature data register (0x41)

@@ -8,7 +8,7 @@
 #include <Adafruit_LittleFS.h>
 #include <InternalFileSystem.h>
 #include <LiquidCrystal_I2C.h>
-#include <CircularBuffer.h>
+#include <ArduinoQueue.h>
 #include "NRF52TimerInterrupt.h"
 #include "NRF52_ISR_Timer.h"
 
@@ -57,23 +57,24 @@ bit_16 AccX, AccY, AccZ;               // For storing raw readings from all thre
 bit_16 GyroX, GyroY, GyroZ;            // For storing raw readings from all three axes of the gyroscope
 char buf[64];
 bool sample = false;
-uint8_t bps = 0;
+uint8_t  bps = 0;
 bool sampling = false;
 bool BLE_switch = false;
 bool sampling_switch = false;
-int menuChoice;
-int SD_write_counter = 0;
-String SD_buffer = "";
 String error_message = "";
 bool writing_to_SD = false;
 byte system_state = 1;
+byte previous_system_state = 1;
 bool screen_updated = false;
-
+bool BLE_connected = false;
+byte run_number = 0;
+unsigned int chunk_num = 0;
 
 bit_12 adcval1;  // For storing the voltage on pin A0
 bit_12 adcval2;  // For storing the voltage on pin A1
 struct chunk {
-  String header;
+  byte run;
+  unsigned int number;
   bit_9 temp;
   bit_12 EOG1[200];
   bit_12 EOG2[200];
@@ -84,7 +85,36 @@ struct chunk {
 };
 chunk current_chunk_sample;
 chunk chunk_to_SD;
-CircularBuffer<chunk, 5> chunks;
+chunk chunk_from_SD;
+// Queue creation:
+chunk Q[10];   // Limit of 10 things in line
+int tail = 0;  // Nothing currently in line
+
+void printLCD(String characters, u_int8_t col = 0, u_int8_t row = 0, bool clear = false) {
+  if (sampling) {
+    ITimer.disableTimer();
+  }
+  if (clear) {
+    lcd.clear();
+  }
+  lcd.setCursor(col, row);  //Set cursor to character 2 on line 0
+  lcd.print(characters);
+  if (sampling) {
+    ITimer.enableTimer();
+  }
+}
+
+void scrollMessage(int row, String message, int delayTime, int totalColumns) {
+  for (int i = 0; i < totalColumns; i++) {
+    message = " " + message;
+  }
+  message = message + " ";
+  for (int position = 0; position < message.length(); position++) {
+    lcd.setCursor(0, row);
+    lcd.print(message.substring(position, position + totalColumns));
+    delay(delayTime);
+  }
+}
 
 void setup() {
   Serial.begin(115200);
@@ -101,45 +131,43 @@ void setup() {
 
   // Setup LCD
   Serial.println("Initializing LCD...");
-  bool LCD_good = LCDsetup();
-  if (LCD_good)
-    Serial.println("LCD Initialized");
+  error_message = error_message + LCDsetup();
 
   // Setup Internal Flash
   Serial.println("Initializing Internal Flash Memory...");
   bool internal_flash_good = InternalFS.begin();
   if (internal_flash_good)
     Serial.println("Internal Flash Memory Initialized");
+  else {
+    Serial.println("Internal Flash Memory Error");
+    error_message = error_message + "SPI Flash Error";
+  }
+
 
   // Setup SD Card
-  bool SD_good = setupSD();
+  error_message = error_message + setupSD();
 
   // Setup Temp Sensor
   Serial.println("Initializing DS1632");
-  bool temp_good = setupDS1631();
-  if (temp_good)
+  error_message = error_message + setupDS1631();
+  if (error_message == "")
     Serial.println("DS1632 Initialized");
 
   // Setup MPU
-  bool MPU_good = setupMPU();
-  if (MPU_good)
-    Serial.println("Inertial Motion Unit Initialized");
-  bool timer_good = timerSetup();
-  //BLESetup();
+  error_message = error_message + setupMPU();
 
-
+  error_message = error_message + timerSetup();
+  BLESetup();
+  if (error_message != "") {
+    system_state = 0;
+    while (1) {
+      printLCD("RESET SYSTEM", 0, 1, 1);
+      scrollMessage(0, error_message, 600, 16);
+    }
+  }
   delay(1000);
 }
 
-void printLCD(String characters, u_int8_t col = 0, u_int8_t row = 0, bool clear = false) {
-  
-  if (clear) {
-    lcd.clear();
-  }
-  lcd.setCursor(col, row);  //Set cursor to character 2 on line 0
-  lcd.print(characters);
-  
-}
 
 void connect_callback(uint16_t conn_handle) {
   // Get the reference to current connection
@@ -181,7 +209,7 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
 
 String stringifyChunk(chunk data_chunk) {
   String output = "";
-  output = output + data_chunk.header;
+  output = output + data_chunk.run;
   output = output + (String)data_chunk.temp.x;
   for (int i = 0; i < 200; i++) {
     output = output + (String)data_chunk.EOG1[i].x;
@@ -195,65 +223,134 @@ String stringifyChunk(chunk data_chunk) {
   return output;
 }
 
+String stringifyChunk2(chunk data_chunk) {
+  String output = "";
+  output = output + data_chunk.run;
+  output = output +"," + data_chunk.number;
+  output = output +"," +  (String)data_chunk.temp.x;
+  for (int i = 0; i < 200; i++) {
+    output = output +"," +  (String)data_chunk.EOG1[i].x;
+    output = output +"," +  (String)data_chunk.EOG2[i].x;
+  }
+
+  for (int i = 0; i < 100; i++) {
+    //output = output + (String)data_chunk.AccX[i/2] + (String)data_chunk.AccY[i/2] + (String)data_chunk.AccZ[i/2];
+    output = output +"," +  (String)data_chunk.GyroX[i].x +"," +  (String)data_chunk.GyroY[i].x +"," +  (String)data_chunk.GyroZ[i].x;
+  }
+  return output;
+}
+
 void loop() {
+
+
   BLE_switch = digitalRead(11);
   sampling_switch = digitalRead(12);
-  if (sampling_switch){
-    if (system_state != 2){
-      screen_updated = false;
-    }
-    system_state = 2;
-  }
-  if (!sampling_switch){
-    if (system_state != 1){
-      screen_updated = false;
-    }
-    system_state = 1;
-    sampling = false;
-  }
-  /**********  Idle  *************/
-  if (system_state == 1){
-    if (!screen_updated){
-      printLCD("Power On", 0, 0, 1);
-      printLCD("Systems: Good", 0, 1, 0);
-      screen_updated = true;
-    }
-      /*{
-  if (Bluefruit.connected()) {
-    uint8_t hrmdata[2] = { 0b00000110, bps++ };  // Sensor connected, increment BPS value
-    // Note: We use .notify instead of .write!
-    // If it is connected but CCCD is not enabled
-    // The characteristic's value is still updated although notification is not sent
-    if (eog_characertistic.notify(hrmdata, sizeof(hrmdata))) {
-      Serial.print("Value updated to: ");
-      Serial.println(bps);
+
+  /*************************************************/
+
+  if (error_message != "") {
+    system_state = 0;
+  } else {
+    if (sampling_switch) {
+      system_state = 3;
+      if (previous_system_state != system_state) {
+        screen_updated = false;
+      }
     } else {
-      Serial.println("ERROR: Notify not set in the CCCD or not connected!");
+      if (BLE_switch) {
+        system_state = 2;
+        if (previous_system_state != system_state) {
+          screen_updated = false;
+        }
+      } else {
+        system_state = 1;
+        if (previous_system_state != system_state) {
+          screen_updated = false;
+        }
+      }
     }
   }
-  */
-  }
-  if (system_state == 2 && sampling == false){
-    
-    sampling = true;
-    if (!screen_updated){
-      printLCD("Recording Data", 0, 0, 1);
-      printLCD("Systems: Good", 0, 1, 0);
-      ITimer.enableTimer();
-      screen_updated = true;
-    }    
-  }
-  else{
-    if (system_state != 2 && sampling == true){
+
+if (previous_system_state == 2 && system_state != 2){
+  Bluefruit.Advertising.stop();
+}
+if (previous_system_state == 3 && system_state != 3){
+  ITimer.disableTimer();
+  sampling = false;
+}
+  switch (system_state) {
+    case 0:
+      printLCD(error_message, 0, 0, 1);
+      printLCD("RESET SYSTEM", 0, 1, 0);
       ITimer.disableTimer();
       sampling = false;
+      Bluefruit.Advertising.stop();
+      while (1) {}
+      break;
+    case 1:
+      if (!screen_updated) {
+        printLCD("Power On,Idleing", 0, 0, 1);
+        printLCD("Systems: Good", 0, 1, 0);
+        screen_updated = true;
+      }
+      break;
+    case 2:
+      if (!screen_updated) {
+        printLCD("BLE Connecting..", 0, 1, 1);
+        screen_updated = true;
+        startAdv();
+      }
+      
+
+      if (Bluefruit.connected()) {
+        if (!BLE_connected){
+          printLCD("Transmitting...", 0, 0, 1);
+          printLCD("BLE Connected", 0, 1, 0);
+        }
+        BLE_connected = true;
+        String test = stringifyChunk2(chunk_to_SD);
+        uint8_t hrmdata[20] = {test[1], test[2], test[3], test[4], test[5], test[6], test[7], test[8], test[9], test[10], test[11], test[12], test[13], test[14], test[15], test[16], test[17], test[18], test[19], test[0]};           // Sensor connected, increment BPS value
+        // Note: We use .notify instead of .write!
+        // If it is connected but CCCD is not enabled
+        // The characteristic's value is still updated although notification is not sent
+        if (eog_characertistic.notify(hrmdata, sizeof(hrmdata))) {
+          Serial.print("Value updated to: ");
+          Serial.println(bps);
+        } else {
+          Serial.println("ERROR: Notify not set");
+        }
+      }
+      if (!Bluefruit.connected() && BLE_connected){
+        BLE_connected = false;
+        screen_updated = false;
+      }
+
+      break;
+    case 3:
+      if (!sampling) {
+        ITimer.enableTimer();
+        sampling = true;
+      }
+      if (!screen_updated) {
+        printLCD("Recording Data...", 0, 0, 1);
+        printLCD("Systems: Good", 0, 1, 0);
+
+        screen_updated = true;
+      }
+      break;
+  }
+  previous_system_state = system_state;
+  if (tail > 0 && Q[0].done_sampling) {
+    if (tail > 0) {
+      chunk_to_SD = Q[0];
+      for (int i = 0; i < tail; i++) {
+        Q[i] = Q[i + 1];
+      }
+      tail--;
     }
+    Serial.println(stringifyChunk2(chunk_to_SD));
+    //Serial.println("Writing Chunk to SD");
+    error_message = SDWrite(stringifyChunk2(chunk_to_SD), "datalog2.txt");
   }
-
-
-  if (chunks.first().done_sampling) { 
-    Serial.println(sampling);
-    Serial.println("Writing Chunk to SD");
-    SDWrite(stringifyChunk(chunks.first()), "datalog.txt");
-  }
+  //SDRead("datalog2.txt");
 }

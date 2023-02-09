@@ -1,6 +1,4 @@
-bool LCDsetup() {
-  bool LCD_good = true;
-
+String LCDsetup() {
   lcd.init();
   lcd.clear();
   lcd.backlight();  // Make sure backlight is on
@@ -12,9 +10,9 @@ bool LCDsetup() {
 
   if (Wire.endTransmission() != 0)
   {
-    LCD_good = false;
     Serial.println("LCD Error!");
+    return "LCD Error ";
   }
-  return LCD_good;
+  return "";
 }
 

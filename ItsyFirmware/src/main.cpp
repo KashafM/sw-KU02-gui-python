@@ -3,12 +3,8 @@
 #include <LiquidCrystal_I2C.h>
 #include <SPI.h>
 #include <SD.h>
-#include <Adafruit_LittleFS.h>
-#include <InternalFileSystem.h>
-#include <Adafruit_TinyUSB.h> // for Serial
-//using namespace Adafruit_LittleFS_Namespace;
-#define FILENAME    "/adafruit.txt"
-#define CONTENTS    "Wow even the flash memory works"
+
+
 LiquidCrystal_I2C lcd(0x27, 16, 2); // set the LCD address to 0x3F for a 16 chars and 2 line display
 /* HRM Service Definitions
    Heart Rate Monitor Service:  0x180D
@@ -17,13 +13,11 @@ LiquidCrystal_I2C lcd(0x27, 16, 2); // set the LCD address to 0x3F for a 16 char
 */
 BLEService        eog_service = BLEService(0x1108);
 BLECharacteristic eog_characertistic = BLECharacteristic(0x2B3D);
+
 BLEDis bledis;    // DIS (Device Information Service) helper class instance
 BLEBas blebas;    // BAS (Battery Service) helper class instance
-
 const int chipSelect = 2;
 const uint8_t ITSY_TESTPULSE_PIN = 7;
-
-Adafruit_LittleFS_Namespace::File file(InternalFS);
 uint8_t  bps = 0;
 bool SD_good;
 int menuChoice;
@@ -60,10 +54,7 @@ bool setupSD() {
 void setup()
 {
   Serial.begin(115200);
-  InternalFS.begin();
   pinMode(7, OUTPUT);
-  pinMode(13, OUTPUT);
-  pinMode(12, INPUT_PULLDOWN);
   LCDsetup();
   SD_good = setupSD();
   // Initialise the Bluefruit module
@@ -208,10 +199,10 @@ void SDWrite(String text, String file) {
   }
 }
 
-void SDRead(String file_read) {
-  File myFile = SD.open(file_read);
+void SDRead(String file) {
+  File myFile = SD.open(file);
   if (myFile) {
-    Serial.println(file_read);
+    Serial.println(file);
 
     // read from the file until there's nothing else in it:
     while (myFile.available()) {
@@ -247,50 +238,8 @@ void testCircuit(uint8_t state) {
   digitalWrite(ITSY_TESTPULSE_PIN, state);
 }
 
-void readInternal(){
-  file.open(FILENAME, Adafruit_LittleFS_Namespace::FILE_O_READ);
-  // file existed
-  if ( file )
-  {
-    Serial.println(FILENAME " file exists");
-    
-    uint32_t readlen;
-    char buffer[256] = { 0 };
-    readlen = file.read(buffer, sizeof(buffer));
-
-    buffer[readlen] = 0;
-    Serial.println(buffer);
-    file.close();
-  }
-}
-
-void writeInternal(){
-  file.open(FILENAME, Adafruit_LittleFS_Namespace::FILE_O_WRITE;
-  // file existed
-  if ( file )
-  {
-    file.write(CONTENTS, strlen(CONTENTS));
-    //file.println(CONTENTS);
-    Serial.println("Wrote to internal");
-    Serial.println();
-    file.close();
-  }
-}
-
-void formatInternal(){
-  InternalFS.begin();
-
-  Serial.print("Formating ... ");
-  delay(1); // for message appear on monitor
-
-  // Format 
-  InternalFS.format();
-
-  Serial.println("Done");
-}
 void loop()
 {
-  Serial.println(digitalRead(12));
   Serial.println();
   Serial.println();
   Serial.println();
@@ -298,12 +247,10 @@ void loop()
   Serial.println("1. SD Card Read");
   Serial.println("2. SD Card Write");
   Serial.println("3. Fun LCD");
-  Serial.println("4. Write Internal FLash");
-  Serial.println("5. Read Internal FLash");
-  Serial.println("6. Current Temp");
-  Serial.println("7. IMU");
-  Serial.println("8. Run POST Circuit");
-  Serial.println("9. BLE");
+  Serial.println("4. BLE");
+  Serial.println("5. Current Temp");
+  Serial.println("6. IMU");
+  Serial.println("7. Run POST Circuit");
 
 
   while (Serial.available() == 0) {
@@ -331,27 +278,8 @@ void loop()
       printLCD("BEST FLC AT TMU", 0, 1, false);
       break;
     case 4:
-      writeInternal();
-      break;
-    case 5:
-      readInternal();
-      break;
-    case 6:
-      printLCD("Temp: Too Hot");
-      break;
-    case 7:
-      printLCD("IMU");
-      break;
-    case 8:
-      printLCD("Pulse On");
-      testCircuit(1);
-      break;
-
-    case 9:
-      Serial.println("Searching for Connection");
       while (1)
       {
-        
         if (Bluefruit.connected())
         {
           uint8_t hrmdata[2] = {0b00000110, bps++}; // Sensor connected, increment BPS value
@@ -361,7 +289,7 @@ void loop()
           // The characteristic's value is still updated although notification is not sent
           if (eog_characertistic.notify(hrmdata, sizeof(hrmdata)))
           {
-            Serial.print("Value updated to: ");
+            Serial.print("Heart Rate Measurement updated to: ");
             Serial.println(bps);
           }
           else
@@ -372,6 +300,10 @@ void loop()
       }
       break;
 
+    case 7:
+      printLCD("Pulse On");
+      testCircuit(1);
+      break;
 
     default:
       Serial.println("Please choose a valid selection");
