@@ -37,10 +37,6 @@ class Ble:
             for characteristic in service.characteristics():
                 self.service_characteristic_pair.append((service.uuid(), characteristic.uuid()))
 
-    def recieveTransmission(self, peripheral):
-        service_uuid, characteristic_uuid = self.service_characteristic_pair[0]
-        peripheral.notify(service_uuid, characteristic_uuid, lambda data: print(f"Notification: {data}"))
-
     def connect(self, peripheral):
         peripheral.connect()
         print("Successfully connected to peripheral")

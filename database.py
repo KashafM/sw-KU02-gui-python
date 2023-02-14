@@ -5,7 +5,7 @@ from datetime import datetime
 import gridfs
 import pandas as pd
 
-cluster = "mongodb+srv://kashaf-m:21N4MAu0zbgX5bIY@cluster0.ms8rz99.mongodb.net/patientDb?retryWrites=true&w=majority"
+cluster = "" ## insert cluster link
 # client = motor.motor_asyncio.AsyncIOMotorClient(cluster)
 client =  MongoClient(cluster)
 db = client.patientDb

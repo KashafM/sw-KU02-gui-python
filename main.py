@@ -549,7 +549,6 @@ class tabsLayout2(QTabWidget):
         layout_Grid.setColumnStretch(1, 1)
         self.tab3.setLayout(layout_Grid)
 
-
 class TableView(QTableWidget):
     def __init__(self, data, *args):
         QTableWidget.__init__(self, *args)
