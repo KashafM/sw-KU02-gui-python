@@ -1,7 +1,7 @@
 
 
 
-void BLESetup(){
+void BLESetup() {
   Serial.println("Initialise the Bluefruit nRF52 module");
   Bluefruit.begin();
   // Set the connect/disconnect callback handlers
@@ -22,13 +22,12 @@ void BLESetup(){
   Serial.println("Setting up the advertising payload(s)");
   startAdv();
   Bluefruit.Advertising.stop();
-  
+
 
   Serial.println("\nAdvertising");
 }
 
-void startAdv(void)
-{
+void startAdv(void) {
   // Advertising packet
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
   Bluefruit.Advertising.addTxPower();
@@ -49,14 +48,12 @@ void startAdv(void)
      https://developer.apple.com/library/content/qa/qa1931/_index.html
   */
   Bluefruit.Advertising.restartOnDisconnect(true);
-  Bluefruit.Advertising.setInterval(32, 244);    // in unit of 0.625 ms
-  Bluefruit.Advertising.setFastTimeout(30);      // number of seconds in fast mode
-  Bluefruit.Advertising.start(0);                // 0 = Don't stop advertising after n seconds
-  
+  Bluefruit.Advertising.setInterval(32, 244);  // in unit of 0.625 ms
+  Bluefruit.Advertising.setFastTimeout(30);    // number of seconds in fast mode
+  Bluefruit.Advertising.start(0);              // 0 = Don't stop advertising after n seconds
 }
 
-void setupEOGService(void)
-{
+void setupEOGService(void) {
   eog_service.begin();
 
   // Note: You must call .begin() on the BLEService before calling .begin() on
@@ -81,10 +78,34 @@ void setupEOGService(void)
   //    B6:7    = UINT16 - RR Internal (1/1024 second resolution)
   eog_characertistic.setProperties(CHR_PROPS_NOTIFY);
   eog_characertistic.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
-  eog_characertistic.setMaxLen(20); // new
+  eog_characertistic.setMaxLen(20);                        // new
   eog_characertistic.setCccdWriteCallback(cccd_callback);  // Optionally capture CCCD updates
   eog_characertistic.begin();
-  uint8_t eogbledata[20] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+  uint8_t eogbledata[20] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
   eog_characertistic.write(eogbledata, 20);
 }
 
+void updateBLEData() {
+  if (BLE_buffer_index) {
+    BLE_out_data[0] = chunk_from_SD.run;
+    BLE_out_data[1] = chunk_from_SD.number;
+  }
+  for (int i = 0; i < 20; i++) {
+    BLE_out_data[i] = chunk_from_SD.run;
+    BLE_buffer_index = BLE_buffer_index + 1;
+  }
+}
+
+void bufferToBLE(byte* buffer, byte* BLE_out) {
+
+  for (int j = 0; j < 20; j++) {
+    BLE_out[j + BLE_buffer_index] = buffer[BLE_buffer_index + j];
+    //Serial.println(BLE_buffer_index + j);
+  }
+  BLE_buffer_index += 20;
+  
+}
+
+void headerByte(){
+  
+}

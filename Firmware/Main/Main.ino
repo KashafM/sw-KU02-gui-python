@@ -11,24 +11,27 @@
 #include <ArduinoQueue.h>
 #include "NRF52TimerInterrupt.h"
 #include "NRF52_ISR_Timer.h"
+#include <math.h>
+#include <stdio.h>
 
+#define GyroMax 100000
+#define GyroMin -100000
+#define TempMax 100000
+#define TempMin -100000
 #define TIMER_INTERRUPT_DEBUG 0
 #define HW_TIMER_INTERVAL_MS 1  // Hardware timer period in ms
 #define TIMER_INTERVAL_5MS 5L   // EOG sampling period in ms (interrupt timer period)
-struct bit_12 {
-  unsigned x : 12;  // 12 bits
-};
-struct bit_9 {
-  unsigned x : 9;  // 9 bits
-};
-struct bit_16 {
-  unsigned x : 16;  // 16 bits
+#define MAX_TEMP 30
+#define MIN_TEMP -30
+#define MAX_POST_ERROR
+struct binFromSDStruct {
+  byte buffer[1412];
 };
 NRF52Timer ITimer(NRF_TIMER_1);
 NRF52_ISR_Timer ISR_Timer;
 LiquidCrystal_I2C lcd(0x27, 16, 2);  // set the LCD address to 0x3F for a 16 chars and 2 line display
 //using namespace Adafruit_LittleFS_Namespace;
-#define FILENAME "/adafruit2.txt"
+#define FILENAME "/systemSettings.txt"
 #define CONTENTS "Wow even the flash memory works\n"
 Adafruit_LittleFS_Namespace::File file(InternalFS);
 BLEService eog_service = BLEService(0x1108);
@@ -51,16 +54,17 @@ byte total_num_samp_TEMP = 0;          // Count of the total number of temperatu
 byte total_chunk_samp = 0;             // Count of the total number of temperature samples taken
 float c_temp = 0;                      // For storing readings in degrees C from the DS1631+ temperature sensor
 float c_temp_MPU = 0;                  // For storing the reading in degrees C from the temperature sensor in the MPU-6050 IMU
-bit_9 raw_t;                           // For storing the raw reading from the DS1631+ temperature sensor
+unsigned short raw_t;                  // For storing the raw reading from the DS1631+ temperature sensor
 int16_t raw_t_MPU = 0;                 // For storing the raw reading from the temperature sensor in the MPU-6050 IMU
-bit_16 AccX, AccY, AccZ;               // For storing raw readings from all three axes of the accelerometer
-bit_16 GyroX, GyroY, GyroZ;            // For storing raw readings from all three axes of the gyroscope
+unsigned short AccX, AccY, AccZ;       // For storing raw readings from all three axes of the accelerometer
+unsigned short GyroX, GyroY, GyroZ;    // For storing raw readings from all three axes of the gyroscope
 char buf[64];
 bool sample = false;
-uint8_t  bps = 0;
+uint8_t bps = 0;
 bool sampling = false;
 bool BLE_switch = false;
 bool sampling_switch = false;
+bool need_SD_chunk = true;
 String error_message = "";
 bool writing_to_SD = false;
 byte system_state = 1;
@@ -69,23 +73,41 @@ bool screen_updated = false;
 bool BLE_connected = false;
 byte run_number = 0;
 unsigned int chunk_num = 0;
+unsigned int BLE_num = 0;
+unsigned int BLE_buffer_index = 0;
+uint8_t BLE_out_data[20];
+unsigned short adcval1;  // For storing the voltage on pin A0
+unsigned short adcval2;  // For storing the voltage on pin A1
+byte binFromSD[1412];
+byte buffer[1407];
+byte bufferRead[1407];
+byte bufferBLE[20];
+unsigned int read_position = 0;
+String sampling_error_message = "";
 
-bit_12 adcval1;  // For storing the voltage on pin A0
-bit_12 adcval2;  // For storing the voltage on pin A1
+struct SystemSettings{
+  byte runNumber = 0;
+  byte currentRunNumbers[255] = {0};
+  byte BLEDone[255] = {0};
+  unsigned int BLEIndex;
+};
+SystemSettings systemSettings;
+
 struct chunk {
-  byte run;
-  unsigned int number;
-  bit_9 temp;
-  bit_12 EOG1[200];
-  bit_12 EOG2[200];
-  bit_16 GyroX[100];
-  bit_16 GyroY[100];
-  bit_16 GyroZ[100];
+  byte run; // 8 bits
+  unsigned int number; // 32 bits
+  unsigned short temp; // 16 bits
+  unsigned short EOG1[200]; // 16 bits x 200
+  unsigned short EOG2[200]; // 16 bits x 200
+  unsigned short GyroX[100]; // 16 bits x 100
+  unsigned short GyroY[100]; // 16 bits x 100
+  unsigned short GyroZ[100]; // 16 bits x 100
   bool done_sampling = false;
 };
 chunk current_chunk_sample;
 chunk chunk_to_SD;
 chunk chunk_from_SD;
+chunk POST_chunk;
 // Queue creation:
 chunk Q[10];   // Limit of 10 things in line
 int tail = 0;  // Nothing currently in line
@@ -158,6 +180,7 @@ void setup() {
 
   error_message = error_message + timerSetup();
   BLESetup();
+  error_message = analogPOST();
   if (error_message != "") {
     system_state = 0;
     while (1) {
@@ -165,6 +188,10 @@ void setup() {
       scrollMessage(0, error_message, 600, 16);
     }
   }
+  //writeSystemSettingsFull(systemSettings);
+  readSystemSetting();
+  DetermineRunNumber();
+  readSystemSetting();
   delay(1000);
 }
 
@@ -210,15 +237,15 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
 String stringifyChunk(chunk data_chunk) {
   String output = "";
   output = output + data_chunk.run;
-  output = output + (String)data_chunk.temp.x;
+  output = output + (String)data_chunk.temp;
   for (int i = 0; i < 200; i++) {
-    output = output + (String)data_chunk.EOG1[i].x;
-    output = output + (String)data_chunk.EOG2[i].x;
+    output = output + (String)data_chunk.EOG1[i];
+    output = output + (String)data_chunk.EOG2[i];
   }
 
   for (int i = 0; i < 100; i++) {
     //output = output + (String)data_chunk.AccX[i/2] + (String)data_chunk.AccY[i/2] + (String)data_chunk.AccZ[i/2];
-    output = output + (String)data_chunk.GyroX[i].x + (String)data_chunk.GyroY[i].x + (String)data_chunk.GyroZ[i].x;
+    output = output + (String)data_chunk.GyroX[i] + (String)data_chunk.GyroY[i] + (String)data_chunk.GyroZ[i];
   }
   return output;
 }
@@ -226,19 +253,20 @@ String stringifyChunk(chunk data_chunk) {
 String stringifyChunk2(chunk data_chunk) {
   String output = "";
   output = output + data_chunk.run;
-  output = output +"," + data_chunk.number;
-  output = output +"," +  (String)data_chunk.temp.x;
+  output = output + "," + data_chunk.number;
+  output = output + "," + (String)data_chunk.temp;
   for (int i = 0; i < 200; i++) {
-    output = output +"," +  (String)data_chunk.EOG1[i].x;
-    output = output +"," +  (String)data_chunk.EOG2[i].x;
+    output = output + "," + (String)data_chunk.EOG1[i];
+    output = output + "," + (String)data_chunk.EOG2[i];
   }
 
   for (int i = 0; i < 100; i++) {
     //output = output + (String)data_chunk.AccX[i/2] + (String)data_chunk.AccY[i/2] + (String)data_chunk.AccZ[i/2];
-    output = output +"," +  (String)data_chunk.GyroX[i].x +"," +  (String)data_chunk.GyroY[i].x +"," +  (String)data_chunk.GyroZ[i].x;
+    output = output + "," + (String)data_chunk.GyroX[i] + "," + (String)data_chunk.GyroY[i] + "," + (String)data_chunk.GyroZ[i];
   }
   return output;
 }
+
 
 void loop() {
 
@@ -271,13 +299,13 @@ void loop() {
     }
   }
 
-if (previous_system_state == 2 && system_state != 2){
-  Bluefruit.Advertising.stop();
-}
-if (previous_system_state == 3 && system_state != 3){
-  ITimer.disableTimer();
-  sampling = false;
-}
+  if (previous_system_state == 2 && system_state != 2) {
+    Bluefruit.Advertising.stop();
+  }
+  if (previous_system_state == 3 && system_state != 3) {
+    ITimer.disableTimer();
+    sampling = false;
+  }
   switch (system_state) {
     case 0:
       printLCD(error_message, 0, 0, 1);
@@ -300,27 +328,51 @@ if (previous_system_state == 3 && system_state != 3){
         screen_updated = true;
         startAdv();
       }
-      
+
 
       if (Bluefruit.connected()) {
-        if (!BLE_connected){
+        if (!BLE_connected) {
           printLCD("Transmitting...", 0, 0, 1);
           printLCD("BLE Connected", 0, 1, 0);
         }
         BLE_connected = true;
-        String test = stringifyChunk2(chunk_to_SD);
-        uint8_t hrmdata[20] = {test[1], test[2], test[3], test[4], test[5], test[6], test[7], test[8], test[9], test[10], test[11], test[12], test[13], test[14], test[15], test[16], test[17], test[18], test[19], test[0]};           // Sensor connected, increment BPS value
-        // Note: We use .notify instead of .write!
-        // If it is connected but CCCD is not enabled
-        // The characteristic's value is still updated although notification is not sent
-        if (eog_characertistic.notify(hrmdata, sizeof(hrmdata))) {
-          Serial.print("Value updated to: ");
-          Serial.println(bps);
+
+        if (need_SD_chunk) {
+          readChunkBinary(bufferRead);
+          //bufferToBLE(bufferRead, bufferBLE);
+          for (int j = 1; j < 20; j++) {
+            bufferBLE[j] = bufferRead[BLE_buffer_index + j];
+            //Serial.println(BLE_buffer_index + j);
+          }
+          bufferBLE[0] = (int)BLE_buffer_index/19;
+          BLE_buffer_index += 19;
+          if (BLE_buffer_index == 1425){
+            Serial.println("Last packet");
+            Serial.println(bufferBLE[0]);
+            bufferBLE[0] = bufferBLE[0] + 128;
+            Serial.println(bufferBLE[0]);
+          }
+          need_SD_chunk = false;
+        }
+
+        if (eog_characertistic.notify(bufferBLE, 20)) {
+          for (int j = 0; j < 20; j++) {
+            bufferBLE[j] = bufferRead[BLE_buffer_index + j];
+            //Serial.println(BLE_buffer_index + j);
+          }
+          bufferBLE[0] = (int)BLE_buffer_index/19;
+          BLE_buffer_index += 19;
+          if (BLE_buffer_index == 1425){
+            Serial.println("Last packet");
+            Serial.println(bufferBLE[0]);
+            bufferBLE[0] = bufferBLE[0] + 128;
+            Serial.println(bufferBLE[0]);
+          }
         } else {
-          Serial.println("ERROR: Notify not set");
+          //Serial.println("ERROR: Notify not set");
         }
       }
-      if (!Bluefruit.connected() && BLE_connected){
+      if (!Bluefruit.connected() && BLE_connected) {
         BLE_connected = false;
         screen_updated = false;
       }
@@ -348,9 +400,13 @@ if (previous_system_state == 3 && system_state != 3){
       }
       tail--;
     }
-    Serial.println(stringifyChunk2(chunk_to_SD));
+    //Serial.println(stringifyChunk2(chunk_to_SD));
     //Serial.println("Writing Chunk to SD");
-    error_message = SDWrite(stringifyChunk2(chunk_to_SD), "datalog2.txt");
+    //error_message = SDWrite(stringifyChunk2(chunk_to_SD), "datalog2.txt");
+    //SDWrite2(chunk_to_SD, "test3.bin");
+    chunkToBinary(chunk_to_SD, buffer);
+    Serial.println("Chunk to Bin");
+    //readChunkBinary(bufferRead);
+    //readChunkFromSDtest();
   }
-  //SDRead("datalog2.txt");
 }

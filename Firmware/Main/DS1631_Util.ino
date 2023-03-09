@@ -19,11 +19,16 @@ String setupDS1631(){
   return "";
 }
 
-bit_9 ds1631_temperature() {
+unsigned short ds1631_temperature() {
   Wire.beginTransmission(DS1631_ADDRESS); // Connect to the DS1631 (send DS1631 address)
   Wire.write(0xAA); // Send the read temperature command
   Wire.endTransmission(false); // Send a repeated start bit
   Wire.requestFrom(DS1631_ADDRESS, 2); // Request a read from the two temperature data registers and then release I2C bus
-  raw_t.x = Wire.read() << 8 | Wire.read(); // Calculate the raw temperature value in binary
+  raw_t = Wire.read() << 8 | Wire.read(); // Calculate the raw temperature value in binary
+
+  if (raw_t > MAX_TEMP || raw_t < MIN_TEMP ){
+    error_message = "TEMP ERROR!";
+  }
+
   return raw_t;
 }
