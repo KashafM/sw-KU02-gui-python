@@ -7,7 +7,7 @@ MPU6050 mpu;
 String setupMPU(){
   // Set up the MPU-6050 IMU sensor
   Serial.println("Initializing Inertial Motion Unit...");
-  if (!mpu.begin(MPU6050_SCALE_250DPS, MPU6050_RANGE_2G)){
+  if (!mpu.begin(MPU6050_SCALE_1000DPS, MPU6050_RANGE_2G)){
     Serial.println("Could not find a valid MPU6050 sensor, check wiring!");
     return ("IMU Error ");
   }
@@ -72,13 +72,6 @@ void MPU_accelgyro() {
   GyroX = rawGyro.XAxis;
   GyroY = rawGyro.YAxis;
   GyroZ = rawGyro.ZAxis;
-
-  if (GyroX > GyroMax || GyroY > GyroMax || GyroZ > GyroMax){
-    sampling_error_message = "MPU ERROR!";
-  }
-  if (GyroX < GyroMin || GyroY < GyroMin || GyroZ < GyroMin){
-    sampling_error_message = "MPU ERROR!";
-  }
   
   //GyroX = float(rawGyro.XAxis) / 131.0;
   //GyroY = float(rawGyro.YAxis) / 131.0;

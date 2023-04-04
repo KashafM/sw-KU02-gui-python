@@ -1,17 +1,7 @@
 
 
 
-void writeInternal() {
-  file.open(FILENAME, Adafruit_LittleFS_Namespace::FILE_O_WRITE);
-  // file existed
-  if (file) {
-    file.write(CONTENTS, strlen(CONTENTS));
-    //file.println(CONTENTS);
-    Serial.println("Wrote to internal");
-    Serial.println();
-    file.close();
-  }
-}
+
 
 void formatInternal() {
   InternalFS.begin();
@@ -85,16 +75,15 @@ void readSystemSetting() {
     file.close();
   }
   Serial.println(systemSettings.runNumber);
-  for (int i = 0; i < 255; i++) {
-    Serial.print(systemSettings.currentRunNumbers[i]);
+  //for (int i = 0; i < 255; i++) {
+  //  Serial.print(systemSettings.currentRunNumbers[i]);
     
-  }
-  Serial.println("");
-  for (int i = 0; i < 255; i++) {
-    Serial.print(systemSettings.BLEDone[i]);
-    
-  }
-  Serial.println("");
+  //}
+  //Serial.println("");
+  //for (int i = 0; i < 255; i++) {
+  //  Serial.print(systemSettings.BLEDone[i]);  
+  //}
+  //Serial.println("");
 }
 
 
@@ -128,4 +117,84 @@ void writeSystemSettingsFull(const SystemSettings& settings) {
 
     file.close();
   }
+}
+
+void outputLog(){
+
+  file.open(FILENAME, Adafruit_LittleFS_Namespace::FILE_O_READ);
+  // file existed
+  if (file) {
+    Serial.println(FILENAME " output:");
+
+    uint32_t readlen;
+    char buffer[256] = { 0 };
+    readlen = file.read(buffer, sizeof(buffer));
+
+    buffer[readlen] = 0;
+    Serial.println(buffer);
+    file.close();
+  }
+}
+void ReadLastLog(){
+
+  file.open(FILENAME, Adafruit_LittleFS_Namespace::FILE_O_READ);
+  // file existed
+  if (file) {
+
+    uint32_t readlen;
+    char buffer[256] = { 0 };
+    readlen = file.read(buffer, sizeof(buffer));
+
+    buffer[readlen] = 0;
+    Serial.println(buffer[0]);
+    file.close();
+  }
+}
+
+void systemLogger(String str) {
+  const int MAX_LINES = 500;
+  
+  file.open(FILENAME, Adafruit_LittleFS_Namespace::FILE_O_READ | Adafruit_LittleFS_Namespace::FILE_O_WRITE);
+  if (!file) {
+    Serial.println("Failed to open file for writing");
+    return;
+  }
+
+  // Get number of lines in the file
+  int num_lines = 0;
+  while (file.available()) {
+    if (file.read() == '\n') {
+      num_lines++;
+    }
+  }
+
+  // If file has reached max lines, remove first line and append new data to last line
+  if (num_lines >= MAX_LINES) {
+    // Get current file size
+    long size = file.size();
+    // Find position of first line break
+    file.seek(0);
+    int first_line_break = file.find('\n');
+    // Calculate position of second line
+    int second_line_start = first_line_break + 1;
+    // Calculate remaining size of file after removing first line
+    long remaining_size = size - second_line_start;
+    // Allocate buffer for remaining data
+    char* remaining_data = new char[remaining_size + 1];
+    // Read remaining data from file
+    file.seek(second_line_start);
+    file.readBytes(remaining_data, remaining_size);
+    remaining_data[remaining_size] = '\0';
+    // Overwrite file with remaining data
+    file.seek(0);
+    file.write(remaining_data);
+    delete[] remaining_data;
+    // Move write position to end of file
+    file.seek(size - first_line_break - 1);
+  }
+
+  // Write new data to file
+  file.print(str);
+  file.println();
+  file.close();
 }

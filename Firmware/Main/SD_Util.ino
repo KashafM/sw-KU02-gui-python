@@ -116,7 +116,7 @@ void readChunkFromSDtest() {
 void SDRead(String file_read) {
   File myFile = SD.open(file_read);
   if (myFile) {
-    Serial.println(file_read);
+    //Serial.println(file_read);
 
     // read from the file until there's nothing else in it:
     while (myFile.available()) {
@@ -134,9 +134,8 @@ void SDRead(String file_read) {
 void SDReadChunk(String file_read) {
   File myFile = SD.open(file_read);
   int lineNum = 0;
-  Serial.println("1");
   if (myFile) {
-    Serial.println(file_read);
+    //Serial.println(file_read);
 
     while (myFile.available()) {
       String line = myFile.readStringUntil('\n');
@@ -201,7 +200,7 @@ void SDReadChunk(String file_read) {
         }
       }
       lineNum++;
-      Serial.println(stringifyChunk(chunk_from_SD));
+      //Serial.println(stringifyChunk(chunk_from_SD));
     }
     // close the file:
     myFile.close();
@@ -213,12 +212,18 @@ void SDReadChunk(String file_read) {
 }
 void readChunkBinary(byte* buffer){
   
-  Serial.println("readChunkBinary:");
-  File dataFile = SD.open("DATA_1.bin", FILE_READ);
+  //Serial.println("DATA_"+(String)fileChoice+".bin");
+  File dataFile = SD.open("DATA_"+(String)fileChoice+".bin", FILE_READ);
+
+  currentFileSize = dataFile.size();
+  //Serial.print("File Size: ");
+  //Serial.println(dataFile.size());
+  number_of_chunk_BLE = (int)currentFileSize/1407;
   if (dataFile) {
     dataFile.seek(read_position * 1407);
     for (int i = 0; i < 1407; i++) {
-      dataFile.read((uint8_t*)&buffer[i], sizeof(buffer[i]));
+      dataFile.read((uint8_t*)&buffer[i], sizeof(buffer[i])); 
+      
     }
     //for (int i = 0; i < 1407; i++) {
     //  for (int j = 7; j >= 0; j--) {
@@ -282,14 +287,14 @@ void chunkToBinary(chunk input, byte* buffer) {
 
   // Write the "done_sampling" bool to the buffer
   //buffer[1407] = input.done_sampling;
-  Serial.println("Write:");
+  //Serial.println("Write:");
   String fileName = "DATA_" + String(systemSettings.runNumber, 10) + ".bin";
   //fileName = fileName.substring(0, fileName.length() - 4) + String("000" + String(systemSettings.runNumber, 10)).substring(String(systemSettings.runNumber, 10).length()) + ".bin";
-  Serial.println(fileName);
+  //Serial.println(fileName);
   File dataFile = SD.open(fileName, FILE_WRITE | O_CREAT);
 
   if (dataFile) {
-    Serial.println(sizeof(*buffer));
+    //Serial.println(sizeof(*buffer));
     for (int i = 0; i < 1407; i++) {
       //for (int j = 7; j >= 0; j--) {
       //  Serial.print((buffer[i] >> j) & 1);
@@ -318,7 +323,7 @@ void DetermineRunNumber() {
     }
 
     String fileName = entry.name(); // Get the name of the file
-    Serial.println(fileName);
+    //Serial.println(fileName);
     if (fileName.startsWith("DATA_")) {
       // Get the digits following "DATA_" to determine the index
       int startIndex = fileName.indexOf("_") + 1;
@@ -349,5 +354,5 @@ void DetermineRunNumber() {
       break;
     }
   }
-  Serial.println(systemSettings.runNumber);
+  //Serial.println(systemSettings.runNumber);
 }

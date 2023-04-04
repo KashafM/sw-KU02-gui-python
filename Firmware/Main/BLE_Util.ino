@@ -1,6 +1,3 @@
-
-
-
 void BLESetup() {
   Serial.println("Initialise the Bluefruit nRF52 module");
   Bluefruit.begin();
@@ -8,23 +5,26 @@ void BLESetup() {
   Bluefruit.Periph.setConnectCallback(connect_callback);
   Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
 
+
   // Configure and Start the Device Information Service
   Serial.println("Configuring the Device Information Service");
-  bledis.setManufacturer("Adafruit Industries");
-  bledis.setModel("ItsyBitsy");
+  bledis.setManufacturer("KU02");
+  bledis.setModel("NodSense1");
   bledis.begin();
-
   // Setup the service using
   // BLEService and BLECharacteristic classes
-  Serial.println("Configuring the Service");
+  Serial.println("Configuring the Services");
   setupEOGService();
+  setupFileService();
   // Setup the advertising packet(s)
   Serial.println("Setting up the advertising payload(s)");
   startAdv();
+
   Bluefruit.Advertising.stop();
 
 
-  Serial.println("\nAdvertising");
+
+  Serial.println("Advertising");
 }
 
 void startAdv(void) {
@@ -34,6 +34,7 @@ void startAdv(void) {
 
   // Include EOG Service UUID
   Bluefruit.Advertising.addService(eog_service);
+  Bluefruit.Advertising.addService(file_service);
 
   // Include Name
   Bluefruit.Advertising.addName();
@@ -47,7 +48,7 @@ void startAdv(void) {
      For recommended advertising interval
      https://developer.apple.com/library/content/qa/qa1931/_index.html
   */
-  Bluefruit.Advertising.restartOnDisconnect(true);
+  Bluefruit.Advertising.restartOnDisconnect(false);
   Bluefruit.Advertising.setInterval(32, 244);  // in unit of 0.625 ms
   Bluefruit.Advertising.setFastTimeout(30);    // number of seconds in fast mode
   Bluefruit.Advertising.start(0);              // 0 = Don't stop advertising after n seconds
@@ -55,6 +56,7 @@ void startAdv(void) {
 
 void setupEOGService(void) {
   eog_service.begin();
+
 
   // Note: You must call .begin() on the BLEService before calling .begin() on
   // any characteristic(s) within that service definition.. Calling .begin() on
@@ -85,6 +87,41 @@ void setupEOGService(void) {
   eog_characertistic.write(eogbledata, 20);
 }
 
+void setupFileService(void) {
+  file_service.begin();
+
+  files_charactertistic.setProperties(CHR_PROPS_READ);
+  files_charactertistic.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
+  files_charactertistic.setMaxLen(20);  // new
+  files_charactertistic.begin();
+  uint8_t filebledata[20] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+  files_charactertistic.write(filebledata, 20);
+
+ 
+
+
+  fileSelect_charactertistic.setProperties(CHR_PROPS_READ | CHR_PROPS_WRITE);
+  fileSelect_charactertistic.setPermission(SECMODE_OPEN, SECMODE_OPEN);
+  fileSelect_charactertistic.setWriteCallback(write_callback);
+
+  fileSelect_charactertistic.begin();
+
+
+}
+
+//void setupFileSelectService(void) {
+//  fileSelect_service.begin();
+
+//  fileSelect_charactertistic.setProperties(CHR_PROPS_WRITE);
+//  fileSelect_charactertistic.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
+//  fileSelect_charactertistic.setMaxLen(1);  // new
+//  fileSelect_charactertistic.begin();
+//  uint8_t filebledata[20] = {0};
+//  fileSelect_charactertistic.write(filebledata, 1);
+  
+//}
+
+
 void updateBLEData() {
   if (BLE_buffer_index) {
     BLE_out_data[0] = chunk_from_SD.run;
@@ -103,9 +140,21 @@ void bufferToBLE(byte* buffer, byte* BLE_out) {
     //Serial.println(BLE_buffer_index + j);
   }
   BLE_buffer_index += 20;
-  
 }
 
-void headerByte(){
+void updateFileOptions() {
+DetermineRunNumber();
+uint8_t filebledata[20] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+int offset = 0;
+  for (int j = 0; j <20; j++) {
+    for (int i = 0; i < 8; i++) {
+      if (systemSettings.currentRunNumbers[i + offset] == 1){
+        filebledata[j] = filebledata[j] + pow(2, (7-i));
+      }
+      
+    }
+    offset = offset + 8;
+  }
   
+  files_charactertistic.write(filebledata, 20);
 }
