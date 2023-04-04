@@ -1,61 +1,46 @@
+# imports
 import simplepyble
-import time
+import logging
+import asyncio
 
-if __name__ == "__main__":
-    adapters = simplepyble.Adapter.get_adapters()
+# logging
+logging.basicConfig(filename='Logs/application.log', format='%(asctime)s %(message)s : %(funcName)s',
+                    datefmt='%m/%d/%Y %I:%M:%S %p', encoding='utf-8', level=logging.INFO)
 
-    if len(adapters) == 0:
-        print("No adapters found")
+# Press the green button in the gutter to run the script.
+class Ble:
+    def __init__(self):
+        self.adapter = adapters = simplepyble.Adapter.get_adapters()
+        self.adapter = adapters[0]
+        self.peripheralDict = {}
 
-    # Query the user to pick an adapter
-    print("Please select an adapter:")
-    for i, adapter in enumerate(adapters):
-        print(f"{i}: {adapter.identifier()} [{adapter.address()}]")
+    def getPeripherals(self):
+        self.adapter.set_callback_on_scan_start(lambda: {})
+        self.adapter.set_callback_on_scan_stop(lambda: {})
 
-    choice = int(input("Enter choice: "))
-    adapter = adapters[choice]
+        # Scan for 5 seconds
+        self.adapter.scan_for(5000)
+        peripherals = self.adapter.scan_get_results()
 
-    print(f"Selected adapter: {adapter.identifier()} [{adapter.address()}]")
+        for peripheral in peripherals:
+            if "Itsy" in peripheral.identifier():
+                self.peripheralDict[peripheral.identifier() + " " + str(peripheral.address())] = peripheral
+        return self.peripheralDict
 
-    adapter.set_callback_on_scan_start(lambda: print("Scan started."))
-    adapter.set_callback_on_scan_stop(lambda: print("Scan complete."))
-    adapter.set_callback_on_scan_found(
-        lambda peripheral: print(f"Found {peripheral.identifier()} [{peripheral.address()}]"))
+    def setPeripheral(self, peripheral):
+        self.peripheral = peripheral
 
-    # Scan for 5 seconds
-    adapter.scan_for(5000)
-    peripherals = adapter.scan_get_results()
+    def setServices(self, peripheral):
+        services = peripheral.services()
+        self.service_characteristic_pair = []
+        for service in services:
+            for characteristic in service.characteristics():
+                self.service_characteristic_pair.append((service.uuid(), characteristic.uuid()))
 
-    # Query the user to pick a peripheral
-    print("Please select a peripheral:")
-    for i, peripheral in enumerate(peripherals):
-        print(f"{i}: {peripheral.identifier()} [{peripheral.address()}]")
+    def connect(self, peripheral):
+        peripheral.connect()
+        print("Successfully connected to peripheral")
 
-    choice = int(input("Enter choice: "))
-    peripheral = peripherals[choice]
-
-    print(f"Connecting to: {peripheral.identifier()} [{peripheral.address()}]")
-    peripheral.connect()
-
-    print("Successfully connected, listing services...")
-    services = peripheral.services()
-    service_characteristic_pair = []
-    for service in services:
-       #print(service.characteristics.getattribute__dir__())
-
-        service_characteristic_pair.append((service.uuid, service.characteristics))
-
-    # Query the user to pick a service/characteristic pair
-    print("Please select a service/characteristic pair:")
-    for i, (service_uuid, characteristic) in enumerate(service_characteristic_pair):
-        print(f"{i}: {service_uuid} {characteristic}")
-
-    choice = int(input("Enter choice: "))
-    service_uuid, characteristic_uuid = service_characteristic_pair[choice]
-
-    # Write the content to the characteristic
-    contents = peripheral.notify(service_uuid, characteristic_uuid, lambda data: print(f"Notification: {data}"))
-
-    time.sleep(5)
-
-    peripheral.disconnect()
+    def disconnect(self, peripheral):
+        peripheral.disconnect()
+        print("Successfully disconnected to peripheral")
