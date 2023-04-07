@@ -1,19 +1,18 @@
+import math
 import os
-
 from pymongo import MongoClient
 from datetime import datetime
 import gridfs
 import pandas as pd
 
-cluster = "" ## insert cluster link
-# client = motor.motor_asyncio.AsyncIOMotorClient(cluster)
-client =  MongoClient(cluster)
+cluster = " "
+client = MongoClient(cluster)
 db = client.patientDb
 patients = db.patients
 fs = gridfs.GridFS(db)
 
 def addData(data):
-    patient = {"Patient ID": data[0], "Last Name": data[1], "First Name": data[2], "Date": datetime.utcnow(), "Age": data[4], "Gender": data[5], "Weight": data[6], "BMI": data[7], "Notes": data[8], "File ID": data[9]}
+    patient = {"Patient ID": data[0], "Last Name": data[1], "First Name": data[2], "Date": datetime.utcnow(), "Age": data[4], "Gender": data[5], "Weight": data[6], "BMI": data[7], "Classification": data[8], "Features": data[9], "Notes": data[10], "Start Hour": data[11], "End Hour": data[12], "File ID": data[13]}
     patients.insert_one(patient)
 
 def getData():
@@ -26,25 +25,32 @@ def getDataOne(id):
     resultList = list(results)
     return resultList
 
-def deleteData(id):
+def deleteData(id, fileID):
     patients.delete_one({"Patient ID": int(id)})
+    fs.delete(fileID)
 
 def updateData(id, data):
-    # data = [lastName, firstName, date, age, gender, weight, BMI, notes]
     patients.update_one(
         {"Patient ID": int(id)},
-        {"$set": {"Last Name": data[0], "First Name": data[1], "Date": data[2], "Age": data[3], "Gender": data[4], "Weight": data[5], "BMI": data[6], "Notes": data[7]}})
+        {"$set": {"Last Name": data[1], "First Name": data[2], "Date": datetime.utcnow(), "Age": data[4], "Gender": data[5], "Weight": data[6], "BMI": data[7], "Classification": data[8], "Features": data[9], "Notes": data[10], "Start Hour": data[11], "End Hour": data[12], "File ID": data[13]}})
 
 def getFile(patient, uiWidget):
     fileId = patient[0]['File ID']
     out_data = fs.get(fileId).read()
-    download_location = "MCU Data/patientData.csv"
+    with open("patient_data.csv", "w") as my_empty_csv:
+        pass
+    download_location = "patient_data.csv"
     output = open(download_location, "wb")
     output.write(out_data)
     output.close()
-
-    create_data_dict(uiWidget)
+    createDataDict(uiWidget)
+    uiWidget.table_widget.updateEogPlot()
     uiWidget.plotGraphs()
+
+def getLatestPatient():
+    result = patients.find({}).sort("_id", -1).limit(1)
+    patientList = list(result)
+    return patientList
 
 def downloadFile(patient, fileLoc):
     file_id = patient[0]["File ID"]
@@ -54,9 +60,8 @@ def downloadFile(patient, fileLoc):
     output.write(outputdata)
     output.close()
 
-def uploadData(patientData, uiWidget):
-    name = "eog.csv"
-    file_location = "MCU Data/" + name
+def uploadData(patientData, uiWidget, condition, name):
+    file_location = name
     file_data = open(file_location, "rb")
     data = file_data.read()
     fs.put(data, filename=name)
@@ -66,30 +71,22 @@ def uploadData(patientData, uiWidget):
     addData(patientData)
     uiWidget.table_widget.table.patientData = getData()
     uiWidget.table_widget.table.setPatientData()
-    uiWidget.plotGraphs()
 
-def create_data_dict(uiWidget):
-    print("creating data dict")
+    with condition:
+        condition.notify()
 
-    df_signals = pd.read_csv('MCU Data/patientData.csv')
-
-    # eog data
-    uiWidget.data_dict["VEOG"] = (df_signals.loc[:, "EOG_V2"].to_numpy() - df_signals.loc[:, "EOG_V1"].to_numpy()).tolist()
-    uiWidget.data_dict["HEOG"] = (df_signals.loc[:, "EOG_H1"].to_numpy() - df_signals.loc[:, "EOG_H2"].to_numpy()).tolist()
-
-    # acceleration data
-    uiWidget.data_dict["IMU x"] = df_signals['ACC_X'].tolist()
-    uiWidget.data_dict["IMU y"] = df_signals['ACC_Y'].tolist()
-    uiWidget.data_dict["IMU z"] = df_signals['ACC_Z'].tolist()
+def createDataDict(uiWidget):
+    df_signals = pd.read_csv("patient_data.csv")
+    uiWidget.data_dict["EOG 1"] = list(filter(lambda x: not math.isnan(x), df_signals.loc[:, "EOG 1"].to_numpy().tolist()))
+    uiWidget.data_dict["EOG 2"] = list(filter(lambda x: not math.isnan(x), df_signals.loc[:, "EOG 2"].to_numpy().tolist()))
 
     # imu data
-    uiWidget.data_dict["Accel. x"] = df_signals['ACC_X'].tolist()
-    uiWidget.data_dict["Accel. y"] = df_signals['ACC_Y'].tolist()
-    uiWidget.data_dict["Accel. z"] = df_signals['ACC_Z'].tolist()
+    uiWidget.data_dict["IMU X"] = list(filter(lambda x: not math.isnan(x), df_signals['IMU X'].tolist()))
+    uiWidget.data_dict["IMU Y"] = list(filter(lambda x: not math.isnan(x),  df_signals['IMU Y'].tolist()))
+    uiWidget.data_dict["IMU Z"] = list(filter(lambda x: not math.isnan(x), df_signals['IMU Z'].tolist()))
 
-    # temperature
-    uiWidget.data_dict["Temp."] = df_signals['Temp'].tolist()
+    # temp
+    uiWidget.data_dict["Temp"] = list(filter(lambda x: not math.isnan(x),  df_signals['Temp'].tolist()))
 
-    os.remove('MCU Data/patientData.csv')
-
+    os.remove("patient_data.csv")
 

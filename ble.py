@@ -1,13 +1,5 @@
-# imports
 import simplepyble
-import logging
-import asyncio
 
-# logging
-logging.basicConfig(filename='Logs/application.log', format='%(asctime)s %(message)s : %(funcName)s',
-                    datefmt='%m/%d/%Y %I:%M:%S %p', encoding='utf-8', level=logging.INFO)
-
-# Press the green button in the gutter to run the script.
 class Ble:
     def __init__(self):
         self.adapter = adapters = simplepyble.Adapter.get_adapters()
@@ -15,6 +7,7 @@ class Ble:
         self.peripheralDict = {}
 
     def getPeripherals(self):
+        self.peripheralDict = {}
         self.adapter.set_callback_on_scan_start(lambda: {})
         self.adapter.set_callback_on_scan_stop(lambda: {})
 
@@ -27,9 +20,6 @@ class Ble:
                 self.peripheralDict[peripheral.identifier() + " " + str(peripheral.address())] = peripheral
         return self.peripheralDict
 
-    def setPeripheral(self, peripheral):
-        self.peripheral = peripheral
-
     def setServices(self, peripheral):
         services = peripheral.services()
         self.service_characteristic_pair = []
@@ -39,8 +29,7 @@ class Ble:
 
     def connect(self, peripheral):
         peripheral.connect()
-        print("Successfully connected to peripheral")
 
     def disconnect(self, peripheral):
         peripheral.disconnect()
-        print("Successfully disconnected to peripheral")
+        del peripheral

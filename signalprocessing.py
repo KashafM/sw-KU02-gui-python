@@ -1,9 +1,38 @@
 from pylab import *
-from scipy.signal import filtfilt
+from scipy.signal import filtfilt, cheby2, butter, freqz, medfilt, savgol_filter, detrend
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy
+import pyedflib
+
+def get_data_horizontal():
+    channel_name = 'Lefteye'
+    channel_name_2 = 'RightEye'
+
+    with pyedflib.EdfReader('MCU Data/ucddb007.rec') as edf_file:
+        channel_index_left = edf_file.getSignalLabels().index(channel_name)
+        channel_data_left = edf_file.readSignal(channel_index_left)
+
+        channel_index_right = edf_file.getSignalLabels().index(channel_name_2)
+        channel_data_right = edf_file.readSignal(channel_index_right)
+
+    HEOG = (channel_data_right - channel_data_left)
+
+    return HEOG
+
+def get_data_vertical():
+    with open('MCU Data/EOGVerticalSignal_TEST.txt', 'r') as file:
+        # Read the contents of the file
+        contents = file.read()
+
+        # Split the contents into individual values
+        data = contents.split()
+
+        # Convert the values from string to their respective data types
+        data = [float(v) for v in data]
+
+        return list(data)
 
 def dataProcessing(data_folder):
     data = pd.read_csv(data_folder)
@@ -12,8 +41,8 @@ def dataProcessing(data_folder):
     return eog_vertical, eog_horizontal
 
 def segment(signal, segment_length, fs):
-    length_segment = segment_length*fs  # 1500 samples
-    num_segments = math.floor((signal.size/length_segment))
+    length_segment = segment_length*fs
+    num_segments = math.floor((len(signal)/length_segment))
     start = 0
     end = length_segment
     rows, cols = (num_segments, length_segment)
@@ -26,57 +55,118 @@ def segment(signal, segment_length, fs):
         segmentedSignal[i] = segment
     return segmentedSignal
 
-def filtering(signal, fs):
-    print("Filtering")
-    fc = 15  # Cutoff frequency
-    fstop = 16  # stop-band at 1000
-    ripple = 1  # we'll allow 3 dB ripple in the passband
-    attenuation = 100  # we'll require 60 dB attenuation in the stop band
+def cheby2_bandpass(data, lowcut, highcut, fs, order=4, rs=30):
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    high = highcut / nyq
+    b, a = cheby2(order, rs, [high, low], 'bandpass')
+    #freqResponse(a, b, fs)
+    filtered_data = filtfilt(b, a, data)
 
-    # Get the order and discard the second output (natural frequency)
-    order, _ = scipy.signal.cheb1ord(fc, fstop, ripple, attenuation, fs=fs)
+    return filtered_data
 
-    # Build the filter
-    b, a = scipy.signal.cheby2(order, ripple, fc, fs=fs)
+def median_filter(data, window_size):
+    # Pad the data array to handle edge cases
+    pad_width = window_size // 2
+    padded_data = np.pad(data, pad_width, mode='edge')
 
-    w, h = scipy.signal.freqz(b, a)
-    # plt.semilogx(w / np.pi, 20 * np.log10(abs(h)))
-    # plt.title('Chebyshev II Bandpass Filter Fit to Constraints')
-    # plt.xlabel('Normalized Frequency')
-    # plt.ylabel('Amplitude [dB]')
-    # plt.grid(which='both', axis='both')
-    # plt.fill([.01, .1, .1, .01], [-3, -3, -99, -99], '0.9', lw=0)  # stop
-    # plt.fill([.2, .2, .5, .5], [9, -60, -60, 9], '0.9', lw=0)  # pass
-    # plt.fill([.6, .6, 2, 2], [-99, -3, -3, -99], '0.9', lw=0)  # stop
-    # plt.axis([0.06, 1, -80, 3])
-    # plt.show()
+    # Apply the median filter
+    filtered_data = medfilt(padded_data, kernel_size=window_size)
 
-    filteredSignal = scipy.signal.filtfilt(b, a, signal)
+    return filtered_data[pad_width:-pad_width]
 
-    # # hanning lowpass filter
-    # b_lp = np.array([1, -1])
-    # a_lp = np.array([1])
-    # filteredSignal = scipy.signal.filtfilt(b_lp, a_lp, signal)
+def polynomialFitting(data, time):
+    # Fit a polynomial to the signal using a 15th-degree polynomial
 
-    # derivative filter
+    poly_degree = 15
+    signal_detrended = detrend(data, type='linear')
+    poly = np.polyfit(time, signal_detrended, poly_degree)
+    signal_baseline = np.polyval(poly, time)
+    filtered_signal = signal_detrended - signal_baseline
+    #filtered_signal = data - np.mean(data)
+    return filtered_signal
+
+def derivative_filter(data):
     b_der = np.array([1, -1])
-    a_der = np.array([1, -0.995])
+    a_der = np.array([1, -0.997])
+    filtered_data = scipy.signal.filtfilt(b_der, a_der, data)
+    #filtered_data = savgol_filter(data, window_length=100, polyorder=1, deriv=1)
+    return filtered_data
 
-    filteredSignal = scipy.signal.filtfilt(b_der, a_der, filteredSignal)
+def normalization(data):
+    data = np.array(data)
+    data = (data - min(data)) / (max(data) - min(data))
+    #data = data/max(data)
+    return data
 
-    return filteredSignal
+def signalProcessingPipeline(data):
+    fs_eog = 200
+    lowcut = 50
+    highcut = 0.01
+    time = np.arange(len(data)) / fs_eog
+    filteredSignalCheby = cheby2_bandpass(data, lowcut, highcut, fs_eog)
+    filteredSignalMedian = median_filter(filteredSignalCheby, 9)
+    filteredSignalDeriv = derivative_filter(filteredSignalMedian)
+    filteredSignalPoly = polynomialFitting(filteredSignalDeriv, time)
+    filteredSignalNorm = normalization(filteredSignalPoly)
 
-def featureExtraction():
-    print("Feature extraction")
+    # fig, axs = plt.subplots(5)
+    # fig.suptitle('Vertical EOG Signal Processing')
+    # axs[0].plot(time, data)
+    # axs[0].set_title("Original Signal")
+    # axs[0].set_xlabel("Time (sec)")
+    # axs[0].set_ylabel("Ampl. (mV)")
+    # axs[1].plot(time, filteredSignalCheby)
+    # axs[1].set_title("Chebyshev Type II Filtering (Order = 4)")
+    # axs[1].set_xlabel("Time (sec)")
+    # axs[1].set_ylabel("Ampl. (mV)")
+    # axs[2].plot(time, filteredSignalMedian)
+    # axs[2].set_title("Median Filtering")
+    # axs[2].set_xlabel("Time (sec)")
+    # axs[2].set_ylabel("Ampl. (mV)")
+    # axs[3].plot(time, filteredSignalPoly)
+    # axs[3].set_title("Derivative Filter & Polynomial Fitting")
+    # axs[3].set_xlabel("Time (sec)")
+    # axs[3].set_ylabel("Ampl. (mV)")
+    # axs[4].plot(time, filteredSignalNorm)
+    # axs[4].set_title("Normalization")
+    # axs[4].set_xlabel("Time (sec)")
+    # axs[4].set_ylabel("Ampl. (mV)")
+    # fig.subplots_adjust(hspace=1.5, wspace=1.5)
+#    plt.savefig("Figures/Signal Processing/SignalProcessingVerticalEOG.png")
+#     plt.show()
 
-def machineLearning():
-    print("Machine learning")
+    return [filteredSignalNorm, filteredSignalPoly]
 
-def plot(signal, fs, title):
+def plot(signal, signalFiltered, fs, title):
     t = np.arange(0, len(signal)/fs, 1/fs)
-    fig, axs = plt.subplots()
-    axs.set_title(title)
-    axs.plot(t, signal, color='C0')
-    axs.set_xlabel("Time (sec)")
-    axs.set_ylabel("Amplitude (microvolts)")
+    fig, axs = plt.subplots(2)
+    fig.suptitle(title)
+    axs[0].plot(t, signal, color='C0')
+    axs[0].set_xlabel("Time (sec)")
+    axs[0].set_ylabel("Amplitude (microvolts)")
+    axs[1].plot(t, signalFiltered, color='C0')
+    axs[1].set_xlabel("Time (sec)")
+    axs[1].set_ylabel("Amplitude (microvolts)")
+    plt.savefig('Figures/' + title + ".png")
+    plt.show()
+
+def freqResponse(a, b, fs):
+    # Plot frequency response
+    w, h = freqz(b, a)
+    freq = w / (2 * np.pi) * fs
+    gain = 20 * np.log10(abs(h))
+    phase = np.unwrap(np.angle(h))
+
+    fig, ax = plt.subplots(2, 1, figsize=(8, 6))
+    ax[0].plot(freq, gain)
+    ax[0].set_ylabel('Gain (dB)')
+    ax[0].set_title('Frequency Response')
+    ax[0].grid(True)
+
+    ax[1].plot(freq, phase)
+    ax[1].set_xlabel('Frequency (Hz)')
+    ax[1].set_ylabel('Phase (radians)')
+    ax[1].grid(True)
+
     plt.show()
