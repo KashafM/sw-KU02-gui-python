@@ -14,8 +14,13 @@ String timerSetup(){
     Serial.println("Can't set ITimer. Select another freq. or timer");
     return ("Timer Error ");
   }
-  
-  ISR_Timer.setInterval(TIMER_INTERVAL_5MS,  SampleAll);
+  if (DIAGNOSTIC_MODE == 0){
+ ISR_Timer.setInterval(TIMER_INTERVAL_5MS,  SampleAll);
+  }
+  else{
+    ISR_Timer.setInterval(TIMER_INTERVAL_5MS,  SampleAllDiag);
+  }
+ 
   ITimer.disableTimer();
   return ("");
   

@@ -7,7 +7,7 @@ MPU6050 mpu;
 String setupMPU(){
   // Set up the MPU-6050 IMU sensor
   Serial.println("Initializing Inertial Motion Unit...");
-  if (!mpu.begin(MPU6050_SCALE_250DPS, MPU6050_RANGE_2G)){
+  if (!mpu.begin(MPU6050_SCALE_1000DPS, MPU6050_RANGE_2G)){
     Serial.println("Could not find a valid MPU6050 sensor, check wiring!");
     return ("IMU Error ");
   }
@@ -60,18 +60,19 @@ void MPU_accelgyro() {
   // Sample gyroscope data
   Vector rawAccel = mpu.readRawAccel(); // Read in the raw accelerometer voltages 
   Vector normAccel = mpu.readNormalizeAccel();
-  AccX.x = rawAccel.XAxis;
-  AccY.x = rawAccel.YAxis;
-  AccZ.x = rawAccel.ZAxis;
+  AccX = rawAccel.XAxis;
+  AccY = rawAccel.YAxis;
+  AccZ = rawAccel.ZAxis;
   //AccX = float(rawAccel.XAxis) / 16384.0;
   //AccY = float(rawAccel.YAxis) / 16384.0;
   //AccZ = float(rawAccel.ZAxis) / 16384.0;
   // Sample gyroscope data
   Vector rawGyro = mpu.readRawGyro(); // Read in the raw gyroscope voltages 
   Vector normGyro = mpu.readNormalizeGyro();
-  GyroX.x = rawGyro.XAxis;
-  GyroY.x = rawGyro.YAxis;
-  GyroZ.x = rawGyro.ZAxis;
+  GyroX = rawGyro.XAxis;
+  GyroY = rawGyro.YAxis;
+  GyroZ = rawGyro.ZAxis;
+  
   //GyroX = float(rawGyro.XAxis) / 131.0;
   //GyroY = float(rawGyro.YAxis) / 131.0;
   //GyroZ = float(rawGyro.ZAxis) / 131.0;
